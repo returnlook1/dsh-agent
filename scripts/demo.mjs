@@ -152,8 +152,7 @@ try {
       body: JSON.stringify({
         skills: ['netcdf-analysis', 'gis-processing'],
         mcpServers: ['data-center'],
-        provider: env.DSH_PROVIDER ?? 'deepseek-official',
-        model: env.DSH_MODEL ?? 'deepseek-flash',
+        // provider/model 由 DSH 决定，演示项目只种能力与提示词
         systemPrompt: '你是海洋环境分析助手。回答时先给结论，再给依据；不确定的数据要说明。',
       }),
     })
