@@ -264,28 +264,28 @@ MCP 连接配置或 profile 模板后，名字没变 → key 不变 → 复用�
 - `PATCH` / `DELETE /api/conversations/:id`：重命名与删除（运行中拒绝）。
 ---
 
-## 12. 供应商与模型的所有权归 DSH
+## 12. 供应商与模型：DSH 定义，服务在 DSH 集合内允许选择
 
-最终定位：**DSH 统一管理供应商和模型，Agent Service 只负责项目、Skill、MCP、会话与对话接口。**
+最终语义（对上一版的修正）：
 
-据此做的收口：
+| 项 | 由谁决定 |
+| --- | --- |
+| Provider 注册、模型清单、凭据 | **DSH** |
+| 默认模型（`agent-default-model`） | **DSH** |
+| 某个项目/对话用哪个路由 | 业务方在 **DSH 清单内**选择；不选则跟随 DSH 默认 |
+| 校验"选的是不是 DSH 报告的" | Agent Service（`400 MODEL_UNKNOWN` / `503 MODEL_UNAVAILABLE`） |
 
-| 项 | 之前 | 现在 |
-| --- | --- | --- |
-| 项目配置 | 含可写 `provider` / `model` | 只含 skills / mcpServers / systemPrompt |
-| 创建对话 | 可指定 provider / model | 不接受（请求里带了也被忽略） |
-| 默认模型 | 服务用"清单第一项" | 取 DSH 的 `agent-default-model`；没有才用清单第一项 |
-| 前端 | Provider / Model 两个下拉 | 只读展示"DSH 当前路由 + 来源"，可选刷新 |
-| 默认路由不可用 | 静默回落到别的模型 | `503 MODEL_UNAVAILABLE` + 可操作提示（装 provider 插件） |
+之前一版把这个指令理解成"界面不再选模型"，删掉了两个下拉并且忽略请求里的 provider/model；
+这既不符合原始方案的 Playground 设计，也让"按项目选模型"这个实际需求消失。现已改回：
 
-为什么严格失败而不是回落：如果 DSH 配的是 A 模型、服务悄悄用 B，前端和业务会以为在按 DSH 的
-配置运行，这比直接报错更危险。运行时缺 provider 插件时，正确做法是把插件装进服务的 profile
-（`dsh plugin --profile agent-service add <包名>`），或改 DSH 的默认模型。
+- `agentConfigPatchSchema` / 创建对话 / 改配置重新接受 `provider` + `model`；
+- `resolveRoute` 三种来源：显式选择（校验后在清单内，`user-selected`）、DSH 默认
+  （`dsh-default-model`）、清单第一项（`catalog-first`）；
+- 只给一侧（例如只给 model）时，另一侧用 DSH 默认补全后再整体校验，避免"半个路由"绕过；
+- **项目配置不把补全后的默认值写回存储**：否则后续对话会把"继承来的默认"误记成
+  `user-selected`（e2e 抓到过这个 bug，已修）；
+- 前端恢复 Provider / Model 两个下拉，候选项只来自 `/api/models`，并提示"候选项与默认值由
+  DSH 提供"。
 
-`routeSource` 会记进快照（`dsh-default-model` / `catalog-first`），`/api/models` 也返回
-`defaultSource` 与 `preferredUnavailable`（配了但不可用时的原因），便于排查。
-
-实测边界：把 `DSH_SOURCE_HOME` 指向真实 `~/.dsh#desktop` 时，服务能读到 DSH 的默认
-`dsh-opencode-go / deepseek-v4.1-flash`；但该第三方 provider 的插件在服务自己的 profile 里
-没有可靠解析（源 profile 是 pnpm 布局 + junction），因此运行时会如实报告不可用并拒绝创建对话——
-这正是"所有权在 DSH、可用性由部署决定"的预期行为。
+安全/一致性上仍然保持：服务不存 provider 凭据、不维护供应商目录、不自行判断模型优劣；
+DSH 默认模型不可用时 fail closed，而不是悄悄换成别的模型。

@@ -21,7 +21,7 @@ import type {
 } from '@agent-studio/shared'
 import { agentConfigSchema, mergeAgentConfig, unique } from '@agent-studio/shared'
 import type { Logger } from '../logger.js'
-import { conversationRunning, conversationStarted, modelUnavailable, notFound } from '../http/errors.js'
+import { conversationRunning, conversationStarted, modelUnavailable, modelUnknown, notFound } from '../http/errors.js'
 import type { ModelCatalogService } from '../models/ModelCatalogService.js'
 import type { CapabilityRevision } from '../runtime/CapabilityRevision.js'
 import type { McpConfig } from '../mcp/McpConfig.js'
@@ -88,26 +88,52 @@ export class ConversationService {
   }
 
   /**
-   * 写入 DSH 决定的模型路由。
+   * 决定并校验模型路由。
    *
-   * **供应商与模型由 DSH 统一管理**：这里不读取、也不接受前端传来的 provider/model，
-   * 只用 `agent-default-model`（优先）或清单第一项覆盖快照里的值。
+   * 规则（"DSH 统一管理供应商与模型"的具体含义）：
+   * 1. 配置里显式给了 provider/model → 必须在 **DSH 报告的清单** 里
+   *    （否则 400 `MODEL_UNKNOWN`，附可用清单），来源记为 `user-selected`；
+   * 2. 没给 → 用 DSH 的默认模型（`agent-default-model`）；
+   * 3. DSH 默认模型在运行时不可用 → 503 `MODEL_UNAVAILABLE`（不悄悄换模型）。
+   *
+   * 也就是说：**清单与默认值由 DSH 决定，选择发生在 DSH 提供的集合内**。
    */
-  private resolveRoute(config: AgentConfig): AgentConfig {
-    // 严格按 DSH 的默认模型：不可用时报错，绝不悄悄换模型。
+  private resolveRoute(config: AgentConfig): { config: AgentConfig; routeSource: AgentConfigSnapshot['routeSource'] } {
+    const explicitProvider = config.provider.trim()
+    const explicitModel = config.model.trim()
+    if (explicitProvider.length > 0 || explicitModel.length > 0) {
+      // 只给一侧时，另一侧用 DSH 默认补全，再整体校验（避免"半个路由"绕过校验）。
+      const fallback = this.deps.models.defaultRouteStrict({
+        unavailable: (message) => modelUnavailable(message),
+      })
+      const route = this.deps.models.requireRoute(
+        explicitProvider.length > 0 ? explicitProvider : fallback.provider,
+        explicitModel.length > 0 ? explicitModel : fallback.model,
+        {
+          unknown: (message, details) => modelUnknown(message, details),
+          unavailable: (message) => modelUnavailable(message),
+        },
+      )
+      return { config: { ...config, ...route }, routeSource: 'user-selected' }
+    }
     const route = this.deps.models.defaultRouteStrict({
       unavailable: (message) => modelUnavailable(message),
     })
-    return { ...config, provider: route.provider, model: route.model }
+    return { config: { ...config, ...route }, routeSource: this.deps.models.lastDefaultSource() }
   }
 
-  private snapshot(config: AgentConfig, projectId: string, inheritedFromProject: boolean): AgentConfigSnapshot {
+  private snapshot(
+    config: AgentConfig,
+    projectId: string,
+    inheritedFromProject: boolean,
+    routeSource: AgentConfigSnapshot['routeSource'],
+  ): AgentConfigSnapshot {
     const capabilityRevision = this.deps.revision.compute(config.skills, config.mcpServers)
     return {
       ...config,
       configKey: computeConfigKey({ ...config, capabilityRevision }),
       capabilityRevision,
-      routeSource: this.deps.models.lastDefaultSource(),
+      routeSource,
       projectId,
       createdAt: this.now(),
       inheritedFromProject,
@@ -120,7 +146,7 @@ export class ConversationService {
     const record = this.deps.store.getProject(projectId)
     if (record === undefined) {
       // 未保存过：返回"DSH 默认路由 + 空能力"，前端可直接展示。
-      return { ...this.resolveRoute(defaultAgentConfig()), projectId, saved: false }
+      return { ...this.resolveRoute(defaultAgentConfig()).config, projectId, saved: false }
     }
     return { ...record.config, projectId, saved: true, updatedAt: record.updatedAt }
   }
@@ -128,14 +154,16 @@ export class ConversationService {
   /** body 为 patch：未提供的字段保持原值。 */
   updateProjectConfig(projectId: string, patch: AgentConfigPatch): ProjectAgentConfigDto {
     const base = this.deps.store.getProject(projectId)?.config ?? defaultAgentConfig()
-    const next = this.validate(
-      this.resolveRoute(
-        agentConfigSchema.parse({
-          ...base,
-          ...stripUndefined(patch as Record<string, unknown>),
-        }),
-      ),
-    )
+    const merged = agentConfigSchema.parse({
+      ...base,
+      ...stripUndefined(patch as Record<string, unknown>),
+    })
+    // 只在"显式给了路由"时校验（并入 DSH 清单校验），但**不把默认路由写回项目配置**：
+    // 项目没选就保持为空，这样对话创建时才能如实标记来源（catalog-first / dsh-default-model）。
+    if (merged.provider.trim().length > 0 || merged.model.trim().length > 0) {
+      this.resolveRoute(merged)
+    }
+    const next = this.validate(merged)
     const record = this.deps.store.saveProject(projectId, next)
     return { ...record.config, projectId, saved: true, updatedAt: record.updatedAt }
   }
@@ -155,20 +183,24 @@ export class ConversationService {
   create(input: CreateConversationRequest): ConversationDto {
     const inherit = input.inheritProjectConfig ?? true
     const project = inherit ? this.deps.store.getProject(input.projectId)?.config : undefined
-    // 供应商/模型不来自请求：始终由 DSH 决定（见 resolveRoute）。
+    // provider/model 可选：给了就必须落在 DSH 清单内（resolveRoute 校验），
+    // 没给则用 DSH 的默认模型。
     const override: AgentConfigPatch = stripUndefined({
       skills: input.skills,
       mcpServers: input.mcpServers,
+      provider: input.provider,
+      model: input.model,
       systemPrompt: input.systemPrompt,
     })
-    const merged = this.validate(this.resolveRoute(mergeAgentConfig(project, override, inherit)))
+    const resolved = this.resolveRoute(mergeAgentConfig(project, override, inherit))
+    const merged = this.validate(resolved.config)
     const timestamp = this.now()
 
     const record: ConversationDto = {
       id: `conv-${randomUUID()}`,
       projectId: input.projectId,
       sessionId: `dsh-${randomBytes(16).toString('hex')}`,
-      config: this.snapshot(merged, input.projectId, inherit && project !== undefined),
+      config: this.snapshot(merged, input.projectId, inherit && project !== undefined, resolved.routeSource),
       status: 'idle',
       title: input.title ?? '',
       createdAt: timestamp,
@@ -192,22 +224,23 @@ export class ConversationService {
     if (record.messageCount > 0) throw conversationStarted()
 
     const current = record.config
-    const nextConfig = this.validate(
-      this.resolveRoute(
-        agentConfigSchema.parse({
-          skills: patch.skills ?? current.skills,
-          mcpServers: patch.mcpServers ?? current.mcpServers,
-          systemPrompt: patch.systemPrompt ?? current.systemPrompt,
-        }),
-      ),
+    const resolvedConfig = this.resolveRoute(
+      agentConfigSchema.parse({
+        skills: patch.skills ?? current.skills,
+        mcpServers: patch.mcpServers ?? current.mcpServers,
+        provider: patch.provider ?? current.provider,
+        model: patch.model ?? current.model,
+        systemPrompt: patch.systemPrompt ?? current.systemPrompt,
+      }),
     )
+    const nextConfig = this.validate(resolvedConfig.config)
 
     const capabilityRevision = this.deps.revision.compute(nextConfig.skills, nextConfig.mcpServers)
     const snapshot: AgentConfigSnapshot = {
       ...nextConfig,
       configKey: computeConfigKey({ ...nextConfig, capabilityRevision }),
       capabilityRevision,
-      routeSource: this.deps.models.lastDefaultSource(),
+      routeSource: resolvedConfig.routeSource,
       projectId: current.projectId,
       createdAt: current.createdAt,
       inheritedFromProject: current.inheritedFromProject,

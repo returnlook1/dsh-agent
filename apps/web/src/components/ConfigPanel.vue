@@ -159,18 +159,42 @@ async function refreshModels(): Promise<void> {
 
       <div class="field">
         <div class="field__head">
-          <span class="field__label">模型（由 DSH 统一管理）</span>
+          <span class="field__label">Provider / Model</span>
           <Button size="small" theme="borderless" :loading="config.modelsLoading" @click="refreshModels">
             从 DSH 刷新
           </Button>
         </div>
-        <div class="model-route-readonly">
-          <Tag size="small" type="light" color="blue">{{ config.dshRoute.provider || '未配置' }}</Tag>
-          <span class="model-route-readonly__model">{{ config.dshRoute.model || '—' }}</span>
+        <div class="model-route">
+          <Select
+            class="model-route__provider"
+            :model-value="config.provider"
+            :loading="config.modelsLoading"
+            :disabled="config.providerOptions.length === 0"
+            filter
+            placeholder="选择 Provider"
+            @update:model-value="config.setProvider(String($event ?? ''))"
+          >
+            <Select.Option v-for="option in config.providerOptions" :key="option.id" :value="option.id">
+              {{ option.name }}（{{ option.id }}）
+            </Select.Option>
+          </Select>
+          <Select
+            class="model-route__model"
+            :model-value="config.model"
+            :loading="config.modelsLoading"
+            :disabled="config.modelOptions.length === 0"
+            filter
+            placeholder="选择 Model"
+            @update:model-value="config.setModel(String($event ?? ''))"
+          >
+            <Select.Option v-for="option in config.modelOptions" :key="option.id" :value="option.id">
+              {{ option.name }}（{{ option.id }}）
+            </Select.Option>
+          </Select>
         </div>
         <p class="field__hint">{{ config.modelSummary }}</p>
         <p class="field__hint">
-          供应商与模型在 DSH 中配置（agent-default-model）；Agent Service 只读采用，页面不可修改。
+          候选项与默认值由 DSH 提供（agent-default-model）；在这里选择会覆盖默认值，并随对话快照冻结。
         </p>
         <p v-if="config.modelsError" class="field__hint field__hint--danger">{{ config.modelsError }}</p>
         <p
@@ -180,7 +204,6 @@ async function refreshModels(): Promise<void> {
           DSH 没有报告可用的 provider/model，请检查 DSH 的 Provider 配置。
         </p>
       </div>
-
       <div class="field">
         <div class="field__head">
           <span class="field__label">系统提示词</span>

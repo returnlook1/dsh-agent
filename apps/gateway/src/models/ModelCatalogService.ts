@@ -126,6 +126,44 @@ export class ModelCatalogService {
     }
     return { ...catalog.default }
   }
+  /**
+   * 校验一个**显式选择**的路由是否在 DSH 报告的清单里。
+   *
+   * 服务不维护自己的供应商目录：可选集合永远是 `GET /api/models` 返回的清单。
+   * @throws errors.unknown - 不在清单里（400 MODEL_UNKNOWN）
+   * @throws errors.unavailable - 清单本身不可用（503）
+   */
+  requireRoute(
+    provider: string,
+    model: string,
+    errors: {
+      unknown: (message: string, details?: unknown) => Error
+      unavailable: (message: string) => Error
+    },
+  ): ResolvedRoute {
+    const catalog = this.current
+    if (catalog === undefined || !hasUsableRoute(catalog)) {
+      throw errors.unavailable(
+        `DSH 没有提供可用的 provider/model${catalog?.error === undefined ? '' : `（${catalog.error}）`}`,
+      )
+    }
+    const entry = catalog.providers.find((item) => item.id === provider)
+    if (entry === undefined) {
+      throw errors.unknown(`未知 provider: ${provider}`, {
+        provider,
+        model,
+        available: catalog.providers.map((item) => ({ id: item.id, models: item.models.map((m) => m.id) })),
+      })
+    }
+    if (!entry.models.some((item) => item.id === model)) {
+      throw errors.unknown(`provider ${provider} 下没有模型 ${model}`, {
+        provider,
+        model,
+        availableModels: entry.models.map((item) => item.id),
+      })
+    }
+    return { provider, model }
+  }
   /** 最近一次默认路由的来源（写进快照，便于排查"为什么用了这个模型"）。 */
   lastDefaultSource(): ModelCatalogResponse['defaultSource'] {
     return this.current?.defaultSource ?? 'catalog-first'

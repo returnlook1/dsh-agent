@@ -120,14 +120,26 @@ export const useConfigStore = defineStore('config', () => {
 
   /** 按清单补全空路由；provider 变了但模型不属于它时，回落到该 provider 的首个模型。 */
   /**
-   * 路由只读：展示时一律对齐 DSH 当前默认路由（供应商与模型由 DSH 统一管理）。
-   * 仅影响展示；保存项目配置不再回写 provider/model。
+   * 补全表单里的路由：
+   * - 空 → 用 DSH 默认路由（`agent-default-model`）；
+   * - provider 变了但模型不属于它 → 回落到该 provider 的首个模型；
+   * - 用户显式选过的值保持不变（可选集合始终来自 DSH 清单）。
    */
   function normaliseRoute(): void {
+    const providers = providerOptions.value
+    if (providers.length === 0) return
     const route = dshRoute.value
-    if (route.provider.length > 0) {
-      provider.value = route.provider
-      model.value = route.model
+    if (provider.value.length === 0) {
+      provider.value = route.provider !== '' ? route.provider : (providers.find((item) => item.models.length > 0) ?? providers[0])?.id ?? ''
+    }
+    const current = providers.find((item) => item.id === provider.value)
+    if (current === undefined) {
+      provider.value = providers[0]?.id ?? ''
+      model.value = providers[0]?.models[0]?.id ?? ''
+      return
+    }
+    if (model.value.length === 0 || !current.models.some((item) => item.id === model.value)) {
+      model.value = current.models[0]?.id ?? ''
     }
   }
 
@@ -254,6 +266,19 @@ export const useConfigStore = defineStore('config', () => {
     return request
   }
 
+  /** 切换 provider：模型自动切到该 provider 的首个模型（若当前模型不属于它）。 */
+  function setProvider(next: string): void {
+    provider.value = next
+    const entry = providerOptions.value.find((item) => item.id === next)
+    if (entry !== undefined && !entry.models.some((item) => item.id === model.value)) {
+      model.value = entry.models[0]?.id ?? ''
+    }
+  }
+
+  function setModel(next: string): void {
+    model.value = next
+  }
+
   async function loadProjectConfig(project?: string): Promise<void> {
     if (project !== undefined) projectId.value = project
     const id = projectId.value.trim()
@@ -284,10 +309,19 @@ export const useConfigStore = defineStore('config', () => {
       configError.value = '请先填写项目 ID'
       return false
     }
-    // 供应商与模型由 DSH 统一管理：这里只提交能力与提示词。
+    const providerValue = provider.value.trim()
+    const modelValue = model.value.trim()
+    if (providerValue.length === 0 || modelValue.length === 0) {
+      configError.value = '请从 DSH 的模型清单中选择 Provider 与 Model'
+      return false
+    }
+
+    // 候选项来自 DSH；服务端会校验是不是 DSH 报告过的路由。
     const patch: AgentConfigPatch = {
       skills: uniqueStrings(selectedSkills.value),
       mcpServers: uniqueStrings(selectedMcpServers.value),
+      provider: providerValue,
+      model: modelValue,
       systemPrompt: systemPrompt.value,
     }
 
@@ -301,8 +335,8 @@ export const useConfigStore = defineStore('config', () => {
           ...patch,
           skills: patch.skills ?? [],
           mcpServers: patch.mcpServers ?? [],
-          provider: provider.value,
-          model: model.value,
+          provider: providerValue,
+          model: modelValue,
           systemPrompt: systemPrompt.value,
           saved: true,
           updatedAt: Date.now(),
@@ -361,6 +395,8 @@ export const useConfigStore = defineStore('config', () => {
     hasUsableModel,
     dshRoute,
     routeSourceLabel,
+    setProvider,
+    setModel,
     modelSummary,
     refreshModels,
     systemPrompt,

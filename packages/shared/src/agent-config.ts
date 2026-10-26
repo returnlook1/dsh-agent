@@ -41,12 +41,14 @@ export type AgentConfig = z.infer<typeof agentConfigSchema>
 /**
  * 部分更新：PUT 时未提供的字段保持原值。
  *
- * **不含 provider / model**：供应商与模型由 DSH 统一管理（`agent-default-model`），
- * Agent Service 只读地采用 DSH 的默认路由，前端不能覆盖。
+ * provider / model 可选：**候选项与默认值都由 DSH 提供**（`GET /api/models`），
+ * 服务只校验"是不是 DSH 报告过的路由"，不维护自己的供应商目录。
  */
 export const agentConfigPatchSchema = z.object({
   skills: z.array(z.string().min(1)).optional(),
   mcpServers: z.array(z.string().min(1)).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
   systemPrompt: z.string().max(20_000).optional(),
 })
 export type AgentConfigPatch = z.infer<typeof agentConfigPatchSchema>
@@ -63,8 +65,13 @@ export interface ProjectAgentConfigDto extends AgentConfig {
 export interface AgentConfigSnapshot extends AgentConfig {
   /** 配置指纹：相同的指纹复用同一个 DSH 运行时。 */
   configKey: string
-  /** 该快照实际使用的模型路由（由 DSH 决定，服务只记录，不可由前端设置）。 */
-  routeSource: 'dsh-default-model' | 'catalog-first'
+  /**
+   * 该快照的实际路由来源：
+   * - `dsh-default-model`：采用 DSH 配置的默认模型；
+   * - `catalog-first`：DSH 没有默认模型，用运行时清单第一项；
+   * - `user-selected`：项目/对话在 DSH 清单内显式选择（覆盖默认）。
+   */
+  routeSource: 'dsh-default-model' | 'catalog-first' | 'user-selected'
   /**
    * 能力版本：由**被选中技能的当前内容** + **MCP 定义** + **profile 模板**共同决定。
    * 改了 SKILL.md 或 MCP 连接配置但名字没变时，新对话会得到新的 revision（从而新建运行时）。
@@ -96,9 +103,11 @@ export function mergeAgentConfig(
   }
   const base = agentConfigSchema.parse({ ...(project ?? {}) })
   if (override === undefined) return base
-  // provider/model 不参与合并：它们由 DSH 决定，服务在生成快照时统一写入。
+  // provider/model：对话值优先，否则沿用项目值；都没有时由服务按 DSH 默认路由补全。
   return agentConfigSchema.parse({
     ...base,
+    provider: override.provider ?? base.provider,
+    model: override.model ?? base.model,
     systemPrompt: override.systemPrompt ?? base.systemPrompt,
     skills: unique([...base.skills, ...(override.skills ?? [])]),
     mcpServers: unique([...base.mcpServers, ...(override.mcpServers ?? [])]),

@@ -25,7 +25,7 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 
 ---
 
-## 2. 单元测试（209 用例）
+## 2. 单元测试（211 用例）
 
 | 范围 | 用例 | 覆盖点 |
 | --- | --- | --- |
@@ -141,7 +141,7 @@ runtimes: 1 个（skills=netcdf-analysis/gis-processing, mcp=data-center）
 | MCP 连接测试 | e2e：`POST /api/mcp-servers/data-center/test` 成功，返回 `protocolVersion` 与 `search_dataset`；`GET .../tools` 同样可用；未知服务器 404 |
 | 结构化工具结果 | e2e：`tool.completed` 带 `result`（含 `matches` 数组）与 `resultText` |
 | 停止 / 重命名 / 删除 | e2e：空闲对话 `stop` 返回 `runtimeClosed:false`；`PATCH` 改名生效；`DELETE` 返回 204 且再查询 404 |
-| 供应商/模型归 DSH | 单测：DSH 默认路由可用时采用；不可用时报错且提示"装进 agent-service profile"；无默认时用清单第一项。e2e：客户端传 `provider/model` 被忽略、快照 `routeSource` 与清单 `defaultSource` 一致 |
+| 供应商/模型归 DSH | 单测：默认路由可用时采用；默认不可用时报错并提示装插件；无默认用清单第一项；显式选择必须在清单内（`user-selected`），未知 → 400。e2e：清单内选择生效并标记 `user-selected`、清单外 400、未选时快照 `routeSource` 与清单 `defaultSource` 一致 |
 
 > 导入的第三方 provider 是否在 `/api/models` 里出现，取决于它依赖的服务（credentials/settings 等）
 > 是否齐备；本次实测这些 bundle 未注册出额外模型，但也没有破坏运行时启动——服务把它当作

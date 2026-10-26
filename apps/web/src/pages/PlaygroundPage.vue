@@ -134,16 +134,19 @@ async function createNow(): Promise<void> {
     ui.notifyError('请先填写项目 ID')
     return
   }
-  // 供应商与模型由 DSH 统一管理：创建对话时不再传 provider/model。
   if (!config.hasUsableModel) {
     ui.notifyError('DSH 没有报告可用的模型，无法新建对话')
     return
   }
+  // 候选项来自 DSH；不选则由服务端用 DSH 默认路由（agent-default-model）。
+  const provider = config.provider.trim()
+  const model = config.model.trim()
 
   const payload: CreateConversationRequest = {
     projectId,
     skills: [...config.selectedSkills],
     mcpServers: [...config.selectedMcpServers],
+    ...(provider.length === 0 || model.length === 0 ? {} : { provider, model }),
     systemPrompt: config.systemPrompt,
     // 左侧表单已经是完整选择；不继承项目默认，避免"取消勾选的技能被并集加回"。
     inheritProjectConfig: false,

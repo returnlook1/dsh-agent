@@ -85,18 +85,19 @@ npm start
 否则返回 `409 CONVERSATION_STARTED`。要换能力就新开一个对话——已有会话不会因为配置变更
 而"中途换脑子"。
 
-## 3. 模型从哪来（供应商与模型由 DSH 统一管理）
+## 3. 模型从哪来（DSH 是唯一事实来源，页面可从 DSH 的清单里选）
 
 provider / model **不在服务里写死**，也不在前端写死：
 
 - 服务启动时用一个**探针插件**在真实 DSH 子进程里问 `ctx.llm.listProviders()` / `listModels()`，
   结果缓存在内存与 `data/models.json`；
-- 默认路由取自 DSH 的 `agent-default-model`（设置 `DSH_SOURCE_HOME` 时读源组合）；DSH 没配置时
-  用清单第一项；
-- **页面不能选模型**：`GET /api/models` 只读展示当前路由与来源（带"从 DSH 刷新"按钮），
-  项目配置与创建对话都不接受 `provider` / `model`；
-- DSH 默认模型在运行时不可用 → 创建对话返回 `503 MODEL_UNAVAILABLE`（不悄悄换模型），
-  按提示把 provider 插件装进服务 profile：`dsh plugin --profile agent-service add <包名>`；
+- **候选集合与默认值都来自 DSH**：Playground 的两个下拉只列 `/api/models` 里的 provider/model，
+  默认值取 DSH 的 `agent-default-model`（设置 `DSH_SOURCE_HOME` 时读源组合）；
+- 选了就生效（`routeSource=user-selected`），不选就用 DSH 默认（`dsh-default-model`）；
+  选了清单外的值 → `400 MODEL_UNKNOWN`；
+- 服务不维护自己的供应商目录、不存 API Key；DSH 默认模型在运行时不可用 →
+  创建对话返回 `503 MODEL_UNAVAILABLE`（不悄悄换模型），按提示把 provider 插件装进
+  服务 profile：`dsh plugin --profile agent-service add <包名>`；
 - 官方端点下模型目录来自 `/models` 列表，自建端点/mock 下来自 adapter 内建目录——
   换 Provider、换 baseURL、升级 DSH 都不需要改代码。
 

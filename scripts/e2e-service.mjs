@@ -269,7 +269,7 @@ async function phaseA() {
     check('未保存时返回默认配置且 saved=false', before.status === 200 && before.body?.saved === false, JSON.stringify(before.body))
     const saved = await request(s.baseUrl, `/api/projects/${projectId}/agent-config`, {
       method: 'PUT',
-      body: JSON.stringify({ skills: ['netcdf-analysis'], mcpServers: [], model: 'ignored-by-server' }),
+      body: JSON.stringify({ skills: ['netcdf-analysis'], mcpServers: [] }),
     })
     check('PUT 项目配置成功', saved.status === 200 && saved.body?.saved === true, JSON.stringify(saved.body))
     const after = await request(s.baseUrl, `/api/projects/${projectId}/agent-config`)
@@ -286,16 +286,25 @@ async function phaseA() {
       body: JSON.stringify({ projectId, mcpServers: ['no-such-server'] }),
     })
     check('未知 MCP 返回 400 MCP_UNKNOWN', badMcp.status === 400 && badMcp.body?.error?.code === 'MCP_UNKNOWN', JSON.stringify(badMcp.body))
-    // 供应商/模型由 DSH 统一管理：客户端传什么都会被忽略
+    // 候选项来自 DSH：清单内显式选择生效，清单外返回 400
+    const pickedModel = (providers.find((item) => item.id === 'deepseek-official')?.models ?? []).at(-1)?.id
+    const picked = await request(s.baseUrl, '/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, provider: 'deepseek-official', model: pickedModel }),
+    })
+    check('在 DSH 清单内显式选择模型 → 生效并标记 user-selected',
+      picked.status === 201 &&
+        picked.body?.config?.model === pickedModel &&
+        picked.body?.config?.routeSource === 'user-selected',
+      `status=${picked.status} ${JSON.stringify(picked.body?.config?.model)}/${JSON.stringify(picked.body?.config?.routeSource)}`)
+
     const badModel = await request(s.baseUrl, '/api/conversations', {
       method: 'POST',
-      body: JSON.stringify({ projectId, model: 'no-such-model', provider: 'no-such-provider' }),
+      body: JSON.stringify({ projectId, provider: 'no-such-provider', model: 'no-such-model' }),
     })
-    check('客户端指定 provider/model 被忽略（仍用 DSH 默认路由）',
-      badModel.status === 201 &&
-        badModel.body?.config?.provider === models.body?.default?.provider &&
-        badModel.body?.config?.model === models.body?.default?.model,
-      `status=${badModel.status} route=${JSON.stringify(badModel.body?.config?.provider)}/${JSON.stringify(badModel.body?.config?.model)}`)
+    check('清单外的 provider/model 返回 400 MODEL_UNKNOWN',
+      badModel.status === 400 && badModel.body?.error?.code === 'MODEL_UNKNOWN',
+      `status=${badModel.status} ${JSON.stringify(badModel.body?.error?.code)}`)
 
     // ---- 创建对话（继承项目配置）
     const created = await request(s.baseUrl, '/api/conversations', {

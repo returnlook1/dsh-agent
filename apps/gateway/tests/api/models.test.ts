@@ -52,28 +52,51 @@ describe('创建对话时的模型路由', () => {
     expect(body.config.model).toBe('deepseek-flash')
   })
 
-  it('客户端指定 provider/model 会被忽略（由 DSH 统一管理）', async () => {
+  it('在 DSH 清单内显式选择模型 → 生效并标记为 user-selected', async () => {
     const response = await h.app.inject({
       method: 'POST',
       url: '/api/conversations',
-      payload: { projectId: 'p-explicit', provider: 'openai', model: 'gpt-4o' },
+      payload: { projectId: 'p-explicit', provider: 'deepseek-official', model: 'deepseek-v4-pro' },
     })
     expect(response.statusCode).toBe(201)
     const config = (response.json() as { config: { provider: string; model: string; routeSource: string } }).config
     expect(config.provider).toBe('deepseek-official')
-    expect(config.model).toBe('deepseek-flash')
-    expect(config.routeSource).toBe('catalog-first')
+    expect(config.model).toBe('deepseek-v4-pro')
+    expect(config.routeSource).toBe('user-selected')
   })
 
-  it('项目配置同样不接受 provider/model（写不进去）', async () => {
+  it('未知模型 → 400 MODEL_UNKNOWN（可选集合来自 DSH）', async () => {
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/conversations',
+      payload: { projectId: 'p-bad', provider: 'deepseek-official', model: 'gpt-4o' },
+    })
+    expect(response.statusCode).toBe(400)
+    const body = response.json() as { error: { code: string; details?: { availableModels?: string[] } } }
+    expect(body.error.code).toBe('MODEL_UNKNOWN')
+    expect(body.error.details?.availableModels).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+  })
+
+  it('未知 provider → 400 MODEL_UNKNOWN（附可用 provider）', async () => {
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/conversations',
+      payload: { projectId: 'p-bad2', provider: 'openai', model: 'deepseek-flash' },
+    })
+    expect(response.statusCode).toBe(400)
+    const body = response.json() as { error: { code: string; details?: { available?: unknown[] } } }
+    expect(body.error.code).toBe('MODEL_UNKNOWN')
+    expect((body.error.details?.available ?? []).length).toBeGreaterThan(0)
+  })
+
+  it('项目配置保存未知模型同样被拒', async () => {
     const response = await h.app.inject({
       method: 'PUT',
       url: '/api/projects/p-bad3/agent-config',
-      payload: { skills: [], model: 'not-a-model' },
+      payload: { model: 'not-a-model' },
     })
-    expect(response.statusCode).toBe(200)
-    const body = response.json() as { model: string }
-    expect(body.model).toBe('deepseek-flash')
+    expect(response.statusCode).toBe(400)
+    expect((response.json() as { error: { code: string } }).error.code).toBe('MODEL_UNKNOWN')
   })
 })
 

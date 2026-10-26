@@ -120,21 +120,23 @@ runtime/snapshots/<configKey>/
 
 `${ENV}` 占位在**生成运行时配置时**从服务进程环境解析；解析不到就报错，不写空值。
 
-### 3.2a 供应商与模型的所有权：DSH
+### 3.2a 供应商与模型：DSH 是唯一事实来源，选择发生在 DSH 的集合内
 
-**Agent Service 不拥有供应商与模型**，只做三件事：读、用、报告。
+| 归属 | 内容 |
+| --- | --- |
+| **DSH** | Provider 注册、模型清单、`agent-default-model` 默认值、凭据 |
+| **Agent Service** | 把清单呈现给前端、校验选择是否属于清单、把选择冻结进对话快照 |
 
-- 默认路由来自 DSH 的 `agent-default-model`（源组合里的 `provider` / `model`）；
-- 运行时清单来自 DSH 的 `ctx.llm.listProviders()` / `listModels()`；
-- 项目配置与对话创建**不接受** `provider` / `model`（请求里带了也会被忽略）；
-- `/api/models` 是只读信息；快照里记录实际使用的路由与来源（`routeSource`），用于排查。
+- 选择接口：项目配置与创建对话都可以带 `provider` / `model`，**但必须落在 DSH 报告的清单里**
+  （否则 `400 MODEL_UNKNOWN`，`details` 带可用清单）；
+- 不选：用 DSH 的默认模型（`agent-default-model`），来源记为 `dsh-default-model`；
+  DSH 没配置默认时用运行时清单第一项（`catalog-first`）；
+- 选：来源记为 `user-selected`，随对话快照冻结；
+- `/api/models` 是**只读**信息（清单 + 默认路由 + 来源），前端只从这里取候选项；
+- DSH 默认模型在运行时不可用 → 创建对话 `503 MODEL_UNAVAILABLE`（不悄悄换模型），
+  按提示把 provider 插件装进服务 profile：`dsh plugin --profile agent-service add <包名>`。
 
-严格语义：**DSH 配置的默认模型必须在当前运行时可用**，否则创建对话返回 `503 MODEL_UNAVAILABLE`，
-不会悄悄改用别的模型。运行时里没有该 provider 时，按提示把它装进服务 profile：
-
-```powershell
-dsh plugin --profile agent-service add <provider-package>
-```
+服务不维护自己的供应商目录、不存 API Key、不判断"哪个模型更好"——这些都在 DSH 里。
 
 ### 3.2b 模型清单来自 DSH
 
@@ -150,8 +152,9 @@ provider 由 Cordis 插件在运行时注册，模型目录由 adapter 提供（
 规则：
 
 - **默认路由** = DSH 的 `agent-default-model`；DSH 没配置时用清单第一项；
-- 该默认路由在运行时不可用 → `503 MODEL_UNAVAILABLE`（**不降级**，并说明怎么装插件）；
-- 清单整体不可用 → `503 MODEL_UNAVAILABLE`；
+- 项目/对话显式选择 → 必须在清单里，否则 `400 MODEL_UNKNOWN`；
+- 默认路由在运行时不可用 → `503 MODEL_UNAVAILABLE`（**不降级**，并说明怎么装插件）；
+- 清单整体不可用 → `503 MODEL_UNAVAILABLE`（无法校验选择）；
 - `GET /api/models?refresh=1` 强制重新发现（换 Provider / baseURL 后不用重启服务）。
 
 ### 3.2c 复用既有 DSH 配置（`DSH_SOURCE_HOME`）
