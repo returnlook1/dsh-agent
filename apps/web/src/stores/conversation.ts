@@ -22,14 +22,25 @@ import { computed, ref } from 'vue'
 import {
   AgentApiError,
   createConversation,
+  deleteConversation as deleteConversationApi,
   describeApiError,
   getConversation,
   getMessages,
   isAbortError,
   listConversations,
   openMessageStream,
+  renameConversation as renameConversationApi,
+  stopConversation as stopConversationApi,
 } from '../services/agent-api'
 import { readServiceEventStream } from '../services/sse'
+
+/** 工具卡片展示记录：在共享契约上补上 `tool.completed` 的可选结果字段。 */
+export interface ChatToolCall extends ToolCallRecord {
+  /** 结构化结果（未知 JSON，展示层自行窄化）。 */
+  result?: unknown
+  /** 纯文本结果（后端截断到 4KB）。 */
+  resultText?: string
+}
 
 /** 聊天区展示用的消息（比 MessageDto 多出本地状态字段）。 */
 export interface ChatMessage {
@@ -37,7 +48,7 @@ export interface ChatMessage {
   role: MessageRole
   content: string
   createdAt: number
-  toolCalls: ToolCallRecord[]
+  toolCalls: ChatToolCall[]
   /** 本地乐观气泡：还没收到 `message.started` 确认。 */
   optimistic?: boolean
   /** 为承载工具调用而创建、且暂无正文的助手占位消息。 */
@@ -50,6 +61,31 @@ export interface SendResult {
   /** 客户端主动取消（例如切换对话），不是错误。 */
   aborted?: boolean
   error?: string
+}
+
+export interface StopResult {
+  ok: boolean
+  /** 409 RUNTIME_BUSY：其它对话共享运行时，服务端拒绝停止。 */
+  conflict?: boolean
+  code?: string
+  message?: string
+  note?: string
+  runtimeClosed?: boolean
+}
+
+export interface RenameResult {
+  ok: boolean
+  code?: string
+  message?: string
+}
+
+export interface DeleteResult {
+  ok: boolean
+  conflict?: boolean
+  code?: string
+  message?: string
+  /** 删除成功后用于刷新该项目的聊天历史。 */
+  projectId?: string
 }
 
 interface ActiveTurn {
@@ -67,6 +103,9 @@ export const useConversationStore = defineStore('conversation', () => {
   const messagesLoading = ref(false)
   const creating = ref(false)
   const streaming = ref(false)
+  const stopping = ref(false)
+  const renaming = ref(false)
+  const deleting = ref(false)
 
   const error = ref<string | null>(null)
   const errorCode = ref<string | null>(null)
@@ -81,6 +120,11 @@ export const useConversationStore = defineStore('conversation', () => {
   let loadSeq = 0
   let historySeq = 0
   let activeTurn: ActiveTurn | null = null
+  /**
+   * 本轮是否由前端主动停止。停止后后端仍可能推送 `message.failed`；
+   * 两个来源都要幂等，因此该标记让事件归并不再把本地 idle 覆盖成 failed。
+   */
+  let stoppedTurn = false
 
   const canSend = computed(() => current.value !== null && !streaming.value)
   const hasMessages = computed(() => messages.value.length > 0)
@@ -101,6 +145,18 @@ export const useConversationStore = defineStore('conversation', () => {
       content: message.content,
       createdAt: message.createdAt,
       toolCalls: message.toolCalls !== undefined ? message.toolCalls.map((call) => ({ ...call })) : [],
+    }
+  }
+
+  /** 停止后把仍在转圈的工具标成失败，避免 UI 永远显示"运行中"。 */
+  function settleRunningTools(reason: string): void {
+    for (const message of messages.value) {
+      for (const call of message.toolCalls) {
+        if (call.status === 'running') {
+          call.status = 'failed'
+          call.error = call.error ?? reason
+        }
+      }
     }
   }
 
@@ -206,12 +262,14 @@ export const useConversationStore = defineStore('conversation', () => {
 
       case 'tool.completed': {
         const found = findToolCall(event.callId)
-        const record: ToolCallRecord = {
+        const record: ChatToolCall = {
           callId: event.callId,
           tool: event.tool,
           status: event.success ? 'succeeded' : 'failed',
           error: event.error,
           durationMs: event.durationMs,
+          ...(event.result === undefined ? {} : { result: event.result }),
+          ...(event.resultText === undefined ? {} : { resultText: event.resultText }),
         }
         if (found !== null) {
           Object.assign(found.call, record)
@@ -223,6 +281,13 @@ export const useConversationStore = defineStore('conversation', () => {
       }
 
       case 'message.failed': {
+        // 用户主动停止后，后端仍可能补一条 message.failed；保持本地 idle，
+        // 不把它再渲染成"本轮失败"（停止成功的 Toast 已经反馈过）。
+        if (stoppedTurn) {
+          if (current.value !== null) current.value.status = 'idle'
+          activeTurn = null
+          break
+        }
         error.value = event.message
         errorCode.value = event.code ?? null
         if (activeTurn !== null) activeTurn.sawFailure = true
@@ -255,7 +320,7 @@ export const useConversationStore = defineStore('conversation', () => {
       }
     }
 
-    if (activeTurn !== null && !activeTurn.sawAssistantMessage && !activeTurn.sawFailure) {
+    if (activeTurn !== null && !activeTurn.sawAssistantMessage && !activeTurn.sawFailure && !stoppedTurn) {
       error.value = '本轮没有收到助手消息，连接可能已中断；请重试或刷新历史。'
       errorCode.value = 'STREAM_INTERRUPTED'
       if (current.value !== null) current.value.status = 'failed'
@@ -263,7 +328,8 @@ export const useConversationStore = defineStore('conversation', () => {
 
     const conversation = current.value
     if (conversation !== null) {
-      if (conversation.status !== 'failed') conversation.status = 'idle'
+      if (!stoppedTurn && conversation.status !== 'failed') conversation.status = 'idle'
+      if (stoppedTurn) conversation.status = 'idle'
       conversation.updatedAt = Date.now()
       conversation.messageCount = messages.value.filter(
         (message) => message.content.length > 0 || message.toolCalls.length > 0,
@@ -277,6 +343,8 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       const fresh = await getConversation(conversationId)
       if (current.value !== null && current.value.id === conversationId && !streaming.value) {
+        // 主动停止后的元数据刷新可能晚于服务端状态落库；保持本地 idle。
+        if (stoppedTurn) fresh.status = 'idle'
         current.value = fresh
       }
     } catch {
@@ -306,6 +374,7 @@ export const useConversationStore = defineStore('conversation', () => {
   async function loadConversation(conversationId: string): Promise<void> {
     const seq = ++loadSeq
     abortTurn()
+    stoppedTurn = false
     current.value = null
     messages.value = []
     loadedConversationId.value = null
@@ -354,6 +423,8 @@ export const useConversationStore = defineStore('conversation', () => {
   function resetSession(): void {
     abortTurn()
     loadSeq += 1
+    stoppedTurn = false
+    activeTurn = null
     current.value = null
     messages.value = []
     loadedConversationId.value = null
@@ -418,6 +489,7 @@ export const useConversationStore = defineStore('conversation', () => {
     error.value = null
     errorCode.value = null
     streaming.value = true
+    stoppedTurn = false
     conversation.status = 'running'
     activeTurn = { sawAssistantMessage: false, sawFailure: false }
 
@@ -497,6 +569,129 @@ export const useConversationStore = defineStore('conversation', () => {
     return `发送失败：${describeApiError(error_)}`
   }
 
+  /**
+   * 停止本轮：`POST /conversations/:id/stop`。
+   *
+   * 成功后就地把本地状态置为 idle、保留已有消息，并取消本地 SSE 读取；
+   * 服务端随后可能补发的 `message.failed` 由 `stoppedTurn` 幂等忽略。
+   * 409 RUNTIME_BUSY 时保持运行状态，把后端文案原样交给调用方展示。
+   */
+  async function stop(): Promise<StopResult> {
+    const conversation = current.value
+    if (conversation === null) return { ok: false, message: '当前没有选中的对话' }
+    if (stopping.value) return { ok: false, message: '正在停止，请稍候' }
+
+    const conversationId = conversation.id
+    stopping.value = true
+    try {
+      const response = await stopConversationApi(conversationId)
+      if (!response.ok) {
+        return {
+          ok: false,
+          code: 'STOP_FAILED',
+          message: response.note ?? '服务返回停止失败',
+        }
+      }
+
+      stoppedTurn = true
+      if (current.value !== null && current.value.id === conversationId) {
+        current.value.status = 'idle'
+      }
+      // 停止前若已收到由本次停止触发的 message.failed，这里把它收干净，
+      // 避免"已停止"之后还挂着一条"本轮失败"的 Banner。
+      error.value = null
+      errorCode.value = null
+      for (const message of messages.value) {
+        if (message.failed === true) message.failed = false
+      }
+      streaming.value = false
+      settleRunningTools('本轮已手动停止')
+      messages.value = messages.value.filter(
+        (message) => message.placeholder !== true || message.toolCalls.length > 0 || message.content.length > 0,
+      )
+      activeTurn = null
+      abortTurn()
+      bumpActivity()
+      void refreshConversationMeta(conversationId)
+      return {
+        ok: true,
+        note: response.note,
+        runtimeClosed: response.runtimeClosed,
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        conflict: err instanceof AgentApiError && err.status === 409,
+        code: err instanceof AgentApiError ? err.code : undefined,
+        message: describeApiError(err),
+      }
+    } finally {
+      stopping.value = false
+    }
+  }
+
+  /** 重命名当前对话（PATCH，1..200 字）。 */
+  async function rename(rawTitle: string): Promise<RenameResult> {
+    const conversation = current.value
+    if (conversation === null) return { ok: false, message: '当前没有选中的对话' }
+    const title = rawTitle.trim()
+    if (title.length === 0) return { ok: false, message: '标题不能为空' }
+    if (title.length > 200) return { ok: false, message: '标题不能超过 200 个字符' }
+    if (renaming.value) return { ok: false, message: '正在保存标题，请稍候' }
+
+    const conversationId = conversation.id
+    renaming.value = true
+    try {
+      const updated = await renameConversationApi(conversationId, title)
+      if (current.value !== null && current.value.id === conversationId) {
+        current.value = updated
+      }
+      const summary = history.value.find((item) => item.id === conversationId)
+      if (summary !== undefined) {
+        summary.title = updated.title
+        summary.status = updated.status
+        summary.updatedAt = updated.updatedAt
+        summary.messageCount = updated.messageCount
+      }
+      bumpActivity()
+      return { ok: true }
+    } catch (err) {
+      return {
+        ok: false,
+        code: err instanceof AgentApiError ? err.code : undefined,
+        message: describeApiError(err),
+      }
+    } finally {
+      renaming.value = false
+    }
+  }
+
+  /** 删除当前对话；成功后清空本地会话，由调用方回到「新对话」并刷新历史。 */
+  async function deleteCurrent(): Promise<DeleteResult> {
+    const conversation = current.value
+    if (conversation === null) return { ok: false, message: '当前没有选中的对话' }
+    if (deleting.value) return { ok: false, message: '正在删除，请稍候' }
+
+    const conversationId = conversation.id
+    const projectId = conversation.projectId
+    deleting.value = true
+    try {
+      await deleteConversationApi(conversationId)
+      resetSession()
+      bumpActivity()
+      return { ok: true, projectId }
+    } catch (err) {
+      return {
+        ok: false,
+        conflict: err instanceof AgentApiError && err.status === 409,
+        code: err instanceof AgentApiError ? err.code : undefined,
+        message: describeApiError(err),
+      }
+    } finally {
+      deleting.value = false
+    }
+  }
+
   return {
     current,
     messages,
@@ -506,6 +701,9 @@ export const useConversationStore = defineStore('conversation', () => {
     messagesLoading,
     creating,
     streaming,
+    stopping,
+    renaming,
+    deleting,
     error,
     errorCode,
     historyError,
@@ -521,6 +719,9 @@ export const useConversationStore = defineStore('conversation', () => {
     resetSession,
     create,
     send,
+    stop,
+    rename,
+    deleteCurrent,
     abortTurn,
   }
 })

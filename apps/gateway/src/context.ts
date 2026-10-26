@@ -3,6 +3,7 @@
  */
 import type { GatewayConfig } from './config.js'
 import type { Logger } from './logger.js'
+import type { DshSource } from './dsh/DshSource.js'
 import type { McpConfig } from './mcp/McpConfig.js'
 import type { ModelCatalogService } from './models/ModelCatalogService.js'
 import type { RuntimePool } from './runtime/RuntimePool.js'
@@ -21,6 +22,8 @@ export interface AppContext {
   catalog: SkillCatalog
   skills: SkillSource
   mcp: McpConfig
+  /** 既有 DSH 配置来源（未启用时 enabled=false）。 */
+  dshSource: DshSource
   /** 模型清单（从 DSH 发现，带缓存）。 */
   models: ModelCatalogService
   conversations: ConversationService

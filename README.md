@@ -106,6 +106,26 @@ GET /api/models
   "source": "live" }
 ```
 
+## 3b. 复用你现有的 DSH 配置
+
+设置一个环境变量即可，不用在服务里重新维护 Skills / MCP / Provider：
+
+```powershell
+$env:DSH_SOURCE_HOME = "$env:USERPROFILE\.dsh"
+$env:DSH_SOURCE_PROFILE = 'desktop'
+npm start
+```
+
+- **Skills**：直接扫源 home 的 `skills/`、`agents/skills/`；
+- **MCP**：把源 profile 复制成临时导入 profile 跑一次 `dsh --dump-config`，解析其中的
+  `@deepseek-ai/dsh-mcp-client` 条目（`node_modules` 用 junction 指回源 profile）；
+- **Provider**：从同一份组合里挑出 provider 插件（跳过与内置 `llm-deepseek*` 冲突的），
+  作为独立 patch 插进运行时快照；`!!js` 表达式原样保留，凭据只从环境或源
+  `.credentials.yaml` 读入子进程环境；
+- `GET /api/dsh-source` 能看到导入了什么、凭据是否可解析（**只报变量名**）。
+
+> 运行时仍然跑在服务自己的快照 home 里，**不会**共享你的个人 `DSH_HOME` 与其会话/权限。
+
 ## 4. Skills 与 MCP 是怎么生效的
 
 `0.2.1-rc.3` 的 SDK 只有 `initialize(provider/model/maxTokens)`，**没有**按会话传
@@ -149,7 +169,10 @@ MCP 服务器定义在 `config/mcp-servers.json`（支持 stdio 与 streamable-h
 | GET | `/api/health` | 健康检查（含 DSH 版本） |
 | GET | `/api/models` | **从 DSH 读取**的 Provider / 模型清单（`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
-| GET | `/api/mcp-servers` | 可用 MCP 服务器 |
+| GET | `/api/mcp-servers` | 可用 MCP 服务器（标注来源：配置文件 / DSH Profile） |
+| POST | `/api/mcp-servers/:id/test` | 连接测试：握手 + `tools/list`（可能 20s） |
+| GET | `/api/mcp-servers/:id/tools` | 工具清单（含参数 Schema） |
+| GET | `/api/dsh-source` | 既有 DSH 配置来源诊断（只报变量名，不报凭据） |
 | GET / PUT | `/api/projects/:projectId/agent-config` | 项目默认能力 |
 | POST | `/api/conversations` | 创建对话（返回 conversationId / sessionId / 配置快照） |
 | GET | `/api/conversations?projectId=` | 历史对话列表 |
@@ -202,6 +225,8 @@ curl -N -X POST "http://127.0.0.1:8787/api/conversations/conv-…/messages" \
 | `RUNTIME_IDLE_MS` | `300000` | 空闲运行时回收（回收后同配置下次自动 resume） |
 | `TURN_TIMEOUT_MS` | `600000` | 单轮上限 |
 | `AGENT_SERVICE_MODEL_DISCOVERY` | `on` | `off` = 关闭向 DSH 探测模型清单（只用缓存） |
+| `DSH_SOURCE_HOME` / `DSH_SOURCE_PROFILE` | – / `desktop` | 复用既有 DSH 配置（Skills/MCP/Provider） |
+| `DSH_SOURCE_IMPORT_PROVIDERS` / `_MCP` | `on` | 是否导入对应的定义 |
 | `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 `Authorization: Bearer` |
 | `CORS_ORIGINS` | – | 允许的前端来源（逗号分隔），默认同源 |
 | `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
@@ -240,7 +265,8 @@ docs/                    服务规格、决策记录、DSH 研究结论
 | 无鉴权 | 默认只监听 `127.0.0.1`；需要内网暴露时设 `INTERNAL_TOKEN`。用户/项目权限由业务后端校验 |
 | 单机 | 一个进程 + JSON 存储；没有多机调度与队列 |
 | 无逐字流式 | DSH 不提供 token 级增量（见上） |
-| 无中途取消 | SDK 没有单轮取消接口；超时后关闭该运行时（会话历史仍在，下次重建后 resume） |
+| 停止语义 | SDK 没有单轮取消接口：`stop` = 关闭承载该对话的运行时；同运行时上还有别的对话在跑时返回 409 `RUNTIME_BUSY`（不误伤） |
+| 会话恢复 | 历史会话恢复失败会明确报 409 `SESSION_RESTORE_FAILED`，不会静默开一个空白会话 |
 | 配置变更 | 已开始的对话不能换能力；新开对话生效 |
 | MCP | 支持 stdio 与 streamable-http；未做 OAuth/凭据托管 |
 

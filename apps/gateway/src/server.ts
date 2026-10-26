@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { REPO_ROOT, describeConfig, loadConfig, type GatewayConfig } from './config.js'
 import { createLogger, type Logger } from './logger.js'
 import { McpConfig } from './mcp/McpConfig.js'
+import { DshSource } from './dsh/DshSource.js'
+import { CapabilityRevision } from './runtime/CapabilityRevision.js'
 import { ModelDiscovery } from './models/ModelDiscovery.js'
 import { ModelCatalogService } from './models/ModelCatalogService.js'
 import { SnapshotMaterializer } from './runtime/SnapshotMaterializer.js'
@@ -53,18 +55,61 @@ export function createServices(
   const messageLog = new MessageLog(path.join(config.dataDir, 'conversations'), logger.child({ component: 'messages' }))
   messageLog.init()
 
-  const catalog = new SkillCatalog({ roots: skillRoots(config), logger: logger.child({ component: 'skills' }) })
+  // 既有 DSH 配置来源（可选）：Skills / MCP / Provider 定义都从这里导入。
+  const dshSource = new DshSource({
+    home: config.dshSourceHome,
+    profile: config.dshSourceProfile,
+    dshBin: config.dshBin,
+    workDir: config.dshSourceWorkDir,
+    logger: logger.child({ component: 'dsh-source' }),
+    importProviders: config.dshSourceImportProviders,
+    importMcp: config.dshSourceImportMcp,
+  })
+  const sourceSkillRoots: SkillRoot[] = dshSource
+    .skillRoots()
+    .map((root) => ({ path: root.path, source: 'user' as const }))
+  const catalog = new SkillCatalog({
+    roots: [...skillRoots(config), ...sourceSkillRoots],
+    logger: logger.child({ component: 'skills' }),
+  })
   const skills = new SkillSource(catalog, logger.child({ component: 'skills' }))
   const mcp = new McpConfig({
     configPath: config.mcpConfigPath,
     logger: logger.child({ component: 'mcp' }),
     repoRoot: REPO_ROOT,
+    extraDefinitions: () => ({
+      servers: dshSource.mcpDefinitions(),
+      source: 'dsh-profile',
+      ...(dshSource.label() === undefined ? {} : { label: dshSource.label() as string }),
+    }),
+  })
+  const revision = new CapabilityRevision({
+    skills,
+    mcp,
+    logger: logger.child({ component: 'capability' }),
+    templateDir: config.templateDir,
   })
   const materializer = new SnapshotMaterializer({
     config,
     logger: logger.child({ component: 'materializer' }),
     skills,
     mcp,
+    ...(dshSource.enabled && config.dshSourceImportProviders
+      ? {
+          providerImport: () => {
+            const entries = dshSource.providerEntries()
+            if (entries.length === 0) return undefined
+            return {
+              entries,
+              env: dshSource.providerEnvValues(),
+              ...(dshSource.sourceNodeModulesDir() === undefined
+                ? {}
+                : { nodeModulesDir: dshSource.sourceNodeModulesDir() as string }),
+              label: dshSource.label() ?? 'dsh-source',
+            }
+          },
+        }
+      : {}),
   })
   // 模型清单：从 DSH 探针获取（失败降级到磁盘缓存，绝不写死模型名）
   const models =
@@ -88,6 +133,7 @@ export function createServices(
     skills,
     mcp,
     models,
+    revision,
     logger: logger.child({ component: 'conversations' }),
   })
   const hub = new SseHub(logger.child({ component: 'sse' }))
@@ -115,6 +161,7 @@ export function createServices(
     skills,
     mcp,
     models,
+    dshSource,
     conversations,
     pool,
     hub,

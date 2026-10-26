@@ -60,6 +60,11 @@ export interface ProjectAgentConfigDto extends AgentConfig {
 export interface AgentConfigSnapshot extends AgentConfig {
   /** 配置指纹：相同的指纹复用同一个 DSH 运行时。 */
   configKey: string
+  /**
+   * 能力版本：由**被选中技能的当前内容** + **MCP 定义** + **profile 模板**共同决定。
+   * 改了 SKILL.md 或 MCP 连接配置但名字没变时，新对话会得到新的 revision（从而新建运行时）。
+   */
+  capabilityRevision: string
   /** 该快照继承自哪个项目。 */
   projectId: string
   /** 创建快照的时间。 */

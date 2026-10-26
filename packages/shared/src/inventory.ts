@@ -62,6 +62,9 @@ export const mcpServerDefinitionSchema = z.object({
 })
 export type McpServerDefinition = z.infer<typeof mcpServerDefinitionSchema>
 
+/** 定义来源：本地配置文件 / 从既有 DSH Profile 导入。 */
+export type McpServerSource = 'config' | 'dsh-profile'
+
 /** GET /api/mcp-servers 的列表项。 */
 export interface McpServerSummaryDto {
   id: string
@@ -69,10 +72,46 @@ export interface McpServerSummaryDto {
   description?: string
   transport: McpTransport
   enabled: boolean
+  /** 定义来自哪里（排障与 UI 提示用）。 */
+  source: McpServerSource
 }
 
 export interface McpServerListResponse {
   servers: McpServerSummaryDto[]
   /** 配置文件路径，排障用。 */
   configPath: string
+  /** 从既有 DSH Profile 导入时，该 profile 的标识（`home#profile`）。 */
+  dshSource?: string
 }
+
+/* --------------------------------------------------------------- MCP 探测 */
+
+/** 一个 MCP 工具（`tools/list` 的结果项）。 */
+export interface McpToolInfo {
+  name: string
+  description?: string
+  /** 工具入参的 JSON Schema（原样透传，前端可渲染成表单）。 */
+  inputSchema?: unknown
+}
+
+/** `POST /api/mcp-servers/:id/test` 与 `GET /api/mcp-servers/:id/tools` 的响应。 */
+export interface McpProbeResponse {
+  ok: boolean
+  serverId: string
+  serverName?: string
+  /** MCP 协议版本（握手结果）。 */
+  protocolVersion?: string
+  tools: McpToolInfo[]
+  /** 连接 + 列表耗时。 */
+  durationMs: number
+  /** 失败原因（ok=false 时）。 */
+  error?: string
+  /** 探测方式：stdio 子进程 / streamable-http。 */
+  transport: McpTransport
+}
+
+export const mcpProbeRequestSchema = z.object({
+  /** 覆盖定义里的超时（毫秒），默认取定义值。 */
+  timeoutMs: z.number().int().min(500).max(120_000).optional(),
+})
+export type McpProbeRequest = z.infer<typeof mcpProbeRequestSchema>

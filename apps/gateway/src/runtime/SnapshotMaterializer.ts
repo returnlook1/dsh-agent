@@ -24,7 +24,7 @@ import YAML from 'yaml'
 import type { AgentConfigSnapshot } from '@agent-studio/shared'
 import type { GatewayConfig } from '../config.js'
 import type { Logger } from '../logger.js'
-import type { McpConfig, ResolvedMcpServer } from '../mcp/McpConfig.js'
+import type { McpConfig, McpValueExpr, RuntimeMcpServer } from '../mcp/McpConfig.js'
 import type { SkillSource } from '../skills/SkillSource.js'
 import type { SkillLocation } from '../skills/SkillSource.js'
 
@@ -49,6 +49,8 @@ export interface MaterializedSnapshot {
   patchDir: string
   agentPatchPath: string
   mcpPatchPath: string
+  /** 从既有 DSH Profile 导入的 provider 覆盖层。 */
+  providerPatchPath: string
   profileName: string
   profileDir: string
   profilePatchPath: string
@@ -58,6 +60,18 @@ export interface MaterializedSnapshot {
   mcpServers: string[]
 }
 
+/** 从既有 DSH Profile 导入的 provider 插件（可选）。 */
+export interface ProviderImport {
+  /** 要插入到 profile patch 的插件条目（来自源组合）。 */
+  entries: ReadonlyArray<{ id: string; name: string; config?: Record<string, unknown> }>
+  /** provider 声明的凭据变量实际值（只注入子进程，不落盘）。 */
+  env: Record<string, string>
+  /** 源 profile 的 node_modules（第三方 provider 插件从这里解析）。 */
+  nodeModulesDir?: string
+  /** 排障标识：`<home>#<profile>`。 */
+  label: string
+}
+
 export interface SnapshotMaterializerDeps {
   config: GatewayConfig
   logger: Logger
@@ -65,6 +79,11 @@ export interface SnapshotMaterializerDeps {
   mcp: McpConfig
   /** 模板目录覆盖（测试用临时目录）。 */
   templateDir?: string
+  /**
+   * "复用既有 DSH 配置"：导入的 provider 插件。
+   * 返回 undefined = 只用模板自带的基础组合。
+   */
+  providerImport?: () => ProviderImport | undefined
 }
 
 function toPosix(value: string): string {
@@ -108,6 +127,10 @@ export function buildRuntimeEnv(options: {
   systemPrompt: string
   toolsDataDir: string
   outputDir: string
+  /** 需要注入的 MCP 凭据环境变量（只含被选中服务器引用的名字）。 */
+  mcpEnv?: Record<string, string>
+  /** 需要注入的 provider 凭据环境变量（从既有 DSH 配置导入时）。 */
+  providerEnv?: Record<string, string>
   parentEnv?: NodeJS.ProcessEnv
 }): NodeJS.ProcessEnv {
   const parent = options.parentEnv ?? process.env
@@ -157,9 +180,13 @@ export function buildRuntimeEnv(options: {
   assign('AGENT_STUDIO_TOOLS_DATA_DIR', options.toolsDataDir)
   assign('AGENT_STUDIO_OUTPUT_DIR', options.outputDir)
   assign('AGENT_STUDIO_ALLOWED_STATIONS', pick('AGENT_STUDIO_ALLOWED_STATIONS'))
-  // 6) Provider 凭据（唯一允许进入子进程的秘密）
+  // 6) Provider 凭据
   assign('DEEPSEEK_API_KEY', options.config.provider.apiKey)
   assign('DEEPSEEK_BASE_URL', options.config.provider.baseUrl)
+  // 7) MCP 凭据：**只注入被引用的变量**，由渲染出的 `!!js` 表达式在子进程里取值
+  for (const [name, value] of Object.entries(options.mcpEnv ?? {})) assign(name, value)
+  // 8) 从既有 DSH 配置导入的 provider 凭据（同样只进环境，不落盘）
+  for (const [name, value] of Object.entries(options.providerEnv ?? {})) assign(name, value)
   return env
 }
 
@@ -180,38 +207,132 @@ export function renderAgentPatch(systemPrompt: string): string {
   ].join('\n')
 }
 
-/** 一个 MCP server → 一个 dsh-mcp-client 条目（形状对齐 scripts/check-runtime.mjs）。 */
-function mcpEntry(server: ResolvedMcpServer, workspaceDir: string): Record<string, unknown> {
-  const config: Record<string, unknown> = {
-    transport: server.transport,
-    serverName: server.id,
-  }
+/** 把值表达式渲染成 YAML 标量：字面量走 JSON 引号，引用走 `!!js`（在子进程里求值）。 */
+export function renderMcpValue(expr: McpValueExpr): string {
+  if (expr.kind === 'literal') return JSON.stringify(expr.value)
+  if (expr.kind === 'env') return `!!js ${JSON.stringify(`process.env.${expr.name} ?? ''`)}`
+  const body = expr.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => `\${process.env.${name} ?? ''}`)
+  return `!!js ${JSON.stringify(`\`${body}\``)}`
+}
+
+function renderMcpEntry(server: RuntimeMcpServer, workspaceDir: string): string[] {
+  const lines: string[] = []
+  lines.push(`    - id: ${JSON.stringify(`mcp-client-${server.id}`)}`)
+  lines.push(`      name: '@deepseek-ai/dsh-mcp-client'`)
+  lines.push(`      config:`)
+  lines.push(`        transport: ${server.transport}`)
+  lines.push(`        serverName: ${JSON.stringify(server.serverName)}`)
   if (server.transport === 'stdio') {
-    config.command = server.command
-    config.args = server.args
-    config.env = server.env
-    config.cwd = toPosix(workspaceDir)
+    lines.push(`        command: ${JSON.stringify(server.command ?? '')}`)
+    lines.push(`        args: ${JSON.stringify(server.args)}`)
+    lines.push(`        cwd: ${JSON.stringify(toPosix(workspaceDir))}`)
+    if (Object.keys(server.env).length > 0) {
+      lines.push(`        env:`)
+      for (const [key, expr] of Object.entries(server.env)) lines.push(`          ${key}: ${renderMcpValue(expr)}`)
+    }
   } else {
-    config.url = server.url
-    config.headers = server.headers
+    lines.push(`        url: ${JSON.stringify(server.url ?? '')}`)
+    if (Object.keys(server.headers).length > 0) {
+      lines.push(`        headers:`)
+      for (const [key, expr] of Object.entries(server.headers)) lines.push(`          ${key}: ${renderMcpValue(expr)}`)
+    }
   }
-  config.toolCallTimeoutMs = server.toolCallTimeoutMs
-  config.failOnStartupError = server.failOnStartup
-  return {
-    id: `mcp-client-${server.id}`,
-    name: '@deepseek-ai/dsh-mcp-client',
-    config,
-  }
+  lines.push(`        toolCallTimeoutMs: ${server.toolCallTimeoutMs}`)
+  lines.push(`        failOnStartupError: ${server.failOnStartup}`)
+  return lines
 }
 
-/** 渲染 MCP 覆盖层；没有选中任何服务器时写顶层空数组（`parsePatchList` 要求数组）。 */
-export function renderMcpPatch(servers: readonly ResolvedMcpServer[], workspaceDir: string): string {
+/** 判断是否是"保留的 JS 表达式"（从源组合里解析出来的 `!!js`）。 */
+function isJsExpression(value: unknown): value is { __jsExpr: string } {
+  return value !== null && typeof value === 'object' && typeof (value as { __jsExpr?: unknown }).__jsExpr === 'string'
+}
+
+function yamlScalar(value: unknown): string {
+  if (isJsExpression(value)) {
+    const expr = value.__jsExpr
+    // 多行表达式（源里的 `>-` 折叠块）用 JSON 引号包成一行，标签仍然生效。
+    return /\n/.test(expr) ? `!!js ${JSON.stringify(expr)}` : `!!js ${expr}`
+  }
+  if (typeof value === 'string') return JSON.stringify(value)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value === null) return 'null'
+  return JSON.stringify(value)
+}
+
+/** 把任意 JSON 值渲染成块状 YAML（只用于 provider 条目，键顺序保持）。 */
+function yamlLines(value: unknown, indent: number): string[] {
+  const pad = ' '.repeat(indent)
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [`${pad}[]`]
+    if (value.every((item) => item === null || typeof item !== 'object')) {
+      return [`${pad}[${value.map((item) => yamlScalar(item)).join(', ')}]`]
+    }
+    const lines: string[] = []
+    for (const item of value) {
+      if (item !== null && typeof item === 'object' && !Array.isArray(item) && !isJsExpression(item)) {
+        const child = yamlLines(item, indent + 2)
+        lines.push(`${pad}- ${(child[0] ?? '').trimStart()}`)
+        lines.push(...child.slice(1))
+      } else {
+        lines.push(`${pad}- ${yamlScalar(item)}`)
+      }
+    }
+    return lines
+  }
+  if (value !== null && typeof value === 'object' && !isJsExpression(value)) {
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length === 0) return [`${pad}{}`]
+    const lines: string[] = []
+    for (const [key, child] of entries) {
+      if (child !== null && typeof child === 'object' && !isJsExpression(child)) {
+        lines.push(`${pad}${key}:`)
+        lines.push(...yamlLines(child, indent + 2))
+      } else {
+        lines.push(`${pad}${key}: ${yamlScalar(child)}`)
+      }
+    }
+    return lines
+  }
+  return [`${pad}${yamlScalar(value)}`]
+}
+
+/**
+ * 渲染"从既有 DSH Profile 导入的 provider 插件"覆盖层。
+ * 源组合里带 `!!js` 的配置会原样还原成表达式（不落任何求值后的值）。
+ */
+export function renderProviderPatch(imported: ProviderImport): string {
+  if (imported.entries.length === 0) {
+    return '# 未从既有 DSH Profile 导入 provider。\n[]\n'
+  }
+  const lines = [
+    `# 从既有 DSH Profile 导入（${imported.label}）：provider 插件`,
+    '# 这些条目来自源组合，`!!js` 表达式保持原样，不写入任何求值结果。',
+    '- insert:',
+  ]
+  for (const entry of imported.entries) {
+    lines.push(`    - id: ${JSON.stringify(entry.id)}`)
+    lines.push(`      name: ${JSON.stringify(entry.name)}`)
+    if (entry.config !== undefined && Object.keys(entry.config).length > 0) {
+      lines.push('      config:')
+      lines.push(...yamlLines(entry.config, 8))
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
+/**
+ * 渲染 MCP 覆盖层。
+ *
+ * 关键：文件里**只有引用**（`!!js process.env.X`），没有真实凭据；
+ * 值在 DSH 子进程启动时求值，环境变量由服务按白名单注入。
+ */
+export function renderMcpPatch(servers: readonly RuntimeMcpServer[], workspaceDir: string): string {
   if (servers.length === 0) return '# 未选中任何 MCP 服务器。\n[]\n'
-  return YAML.stringify([{ insert: servers.map((server) => mcpEntry(server, workspaceDir)) }], {
-    lineWidth: 0,
-  })
+  const lines = ['# 由 DSH Agent Service 生成：MCP 服务器（凭据以 !!js 引用表达，不落盘）', '- insert:']
+  for (const server of servers) lines.push(...renderMcpEntry(server, workspaceDir))
+  lines.push('')
+  return `${lines.join('\n')}\n`
 }
-
 export class SnapshotMaterializer {
   constructor(private readonly deps: SnapshotMaterializerDeps) {}
 
@@ -234,7 +355,7 @@ export class SnapshotMaterializer {
 
   snapshotPaths(configKey: string): Pick<
     MaterializedSnapshot,
-    'configKey' | 'rootDir' | 'homeDir' | 'skillsViewDir' | 'workspaceDir' | 'patchDir' | 'agentPatchPath' | 'mcpPatchPath' | 'profileName' | 'profileDir' | 'profilePatchPath'
+    'configKey' | 'rootDir' | 'homeDir' | 'skillsViewDir' | 'workspaceDir' | 'patchDir' | 'agentPatchPath' | 'mcpPatchPath' | 'providerPatchPath' | 'profileName' | 'profileDir' | 'profilePatchPath'
   > {
     const profileName = this.deps.config.dshProfile
     if (!PROFILE_NAME.test(profileName)) {
@@ -253,6 +374,7 @@ export class SnapshotMaterializer {
       patchDir,
       agentPatchPath: path.join(patchDir, 'agent.cordis.yml'),
       mcpPatchPath: path.join(patchDir, 'mcp.cordis.yml'),
+      providerPatchPath: path.join(patchDir, 'providers.cordis.yml'),
       profileName,
       profileDir,
       profilePatchPath: path.join(profileDir, 'cordis.patch.yml'),
@@ -274,6 +396,27 @@ export class SnapshotMaterializer {
       fs.copyFileSync(path.join(sourceDir, entry.name), path.join(dataDir, entry.name))
     }
     return dataDir
+  }
+
+  /**
+   * 让快照 profile 能解析源 profile 的插件：在 `<profile>/node_modules` 建 junction。
+   * Windows 上目录 junction 不需要管理员权限；已存在则跳过。
+   */
+  private linkProfileNodeModules(profileDir: string, sourceNodeModules: string): void {
+    const target = path.join(profileDir, 'node_modules')
+    if (fs.existsSync(target)) return
+    if (!fs.existsSync(sourceNodeModules)) {
+      this.deps.logger.warn('provider import: source node_modules missing', { sourceNodeModules })
+      return
+    }
+    try {
+      fs.symlinkSync(sourceNodeModules, target, 'junction')
+    } catch (error) {
+      this.deps.logger.warn('provider import: linking node_modules failed', {
+        sourceNodeModules,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   materialize(snapshot: AgentConfigSnapshot): MaterializedSnapshot {
@@ -322,14 +465,36 @@ export class SnapshotMaterializer {
       WORKSPACE: toPosix(paths.workspaceDir),
       TOOLS_PLUGIN: toPosix(this.deps.config.pluginTools),
     }
+    // profile 模板由 Lead 维护；从既有 DSH 配置导入的 provider 作为独立 patch 叠加。
     fs.writeFileSync(path.join(paths.profileDir, 'package.json'), renderTemplate(this.readTemplate('package.json'), substitutions), 'utf8')
     fs.writeFileSync(paths.profilePatchPath, renderTemplate(this.readTemplate('cordis.patch.yml'), substitutions), 'utf8')
     // home 级 patch 必须是合法数组（纯注释会让 DSH boot 失败）。
     fs.writeFileSync(path.join(paths.homeDir, 'cordis.patch.yml'), '[]\n', 'utf8')
 
+    // provider 导入（可选）：patch + node_modules junction + 凭据环境
+    const providerImport = this.deps.providerImport?.()
+    const providerEnv: Record<string, string> = {}
+    if (providerImport !== undefined) {
+      fs.writeFileSync(paths.providerPatchPath, renderProviderPatch(providerImport), 'utf8')
+      if (providerImport.nodeModulesDir !== undefined) {
+        this.linkProfileNodeModules(paths.profileDir, providerImport.nodeModulesDir)
+      }
+      Object.assign(providerEnv, providerImport.env)
+      logger.info('provider import applied', {
+        label: providerImport.label,
+        entries: providerImport.entries.length,
+        credentials: Object.keys(providerImport.env).length,
+        nodeModules: providerImport.nodeModulesDir,
+      })
+    } else {
+      fs.writeFileSync(paths.providerPatchPath, '# 未启用 provider 导入。\n[]\n', 'utf8')
+    }
+
     // 每个快照的差异层：系统提示词 + 被选中的 MCP
     const mcpServers = this.deps.mcp.assertKnown(snapshot.mcpServers)
-    const resolved = mcpServers.map((server) => this.deps.mcp.resolve(server))
+    const resolved = mcpServers.map((server) => this.deps.mcp.resolveForRuntime(server))
+    const mcpEnv: Record<string, string> = {}
+    for (const server of mcpServers) Object.assign(mcpEnv, this.deps.mcp.envFor(server))
     fs.writeFileSync(paths.agentPatchPath, renderAgentPatch(snapshot.systemPrompt), 'utf8')
     fs.writeFileSync(paths.mcpPatchPath, renderMcpPatch(resolved, paths.workspaceDir), 'utf8')
 
@@ -353,6 +518,8 @@ export class SnapshotMaterializer {
       systemPrompt: snapshot.systemPrompt,
       toolsDataDir,
       outputDir: path.join(paths.workspaceDir, TOOLS_OUTPUT_SUBDIR),
+      mcpEnv,
+      providerEnv,
     })
 
     return {

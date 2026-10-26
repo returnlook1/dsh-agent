@@ -50,6 +50,7 @@ function probeSnapshot(): AgentConfigSnapshot {
     model: '',
     systemPrompt: '',
     configKey: PROBE_CONFIG_KEY,
+    capabilityRevision: 'model-probe',
     projectId: '_probe',
     createdAt: Date.now(),
     inheritedFromProject: false,

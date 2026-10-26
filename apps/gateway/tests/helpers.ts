@@ -186,6 +186,10 @@ export class FakeRuntimeClient implements RuntimeClient {
   private readonly tokens = new Set<object>()
   private closed = false
 
+  /** 测试可配置：initialize 延迟（并发冷启动）与 resumeSession 失败（会话恢复失败）。 */
+  initializeDelayMs = 0
+  resumeError: string | undefined
+
   constructor(public script: TurnScript = defaultTurnScript) {}
 
   start(): void {
@@ -207,6 +211,7 @@ export class FakeRuntimeClient implements RuntimeClient {
   }
 
   async resumeSession(sessionId: string): Promise<void> {
+    if (this.resumeError !== undefined) throw new Error(this.resumeError)
     this.resumed.push(sessionId)
   }
 
@@ -262,16 +267,28 @@ export interface FakeFactoryHandle {
 }
 
 /** 每个运行时一个新的假客户端，脚本可统一注入。 */
-export function createFakeClientFactory(script: TurnScript = defaultTurnScript): FakeFactoryHandle {
+export interface FakeFactoryOptions {
+  /** 每次 initialize 的延迟（毫秒），用于并发冷启动测试。 */
+  initializeDelayMs?: number
+  /** 设置后 resumeSession 一律失败（模拟 DSH 会话日志缺失/损坏）。 */
+  resumeError?: string
+}
+
+export function createFakeClientFactory(
+  script: TurnScript = defaultTurnScript,
+  options: FakeFactoryOptions = {},
+): FakeFactoryHandle {
   const clients: FakeRuntimeClient[] = []
-  const options: RuntimeClientOptions[] = []
+  const runtimeOptions: RuntimeClientOptions[] = []
   const factory: RuntimeClientFactory = (clientOptions) => {
-    options.push(clientOptions)
+    runtimeOptions.push(clientOptions)
     const client = new FakeRuntimeClient(script)
+    if (options.initializeDelayMs !== undefined) client.initializeDelayMs = options.initializeDelayMs
+    if (options.resumeError !== undefined) client.resumeError = options.resumeError
     clients.push(client)
     return client
   }
-  return { factory, clients, options }
+  return { factory, clients, options: runtimeOptions }
 }
 
 /* ------------------------------------------------------------------ 配置 */

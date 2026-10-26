@@ -13,10 +13,12 @@ import {
   createConversationRequestSchema,
   sendMessageRequestSchema,
   updateConversationConfigRequestSchema,
+  updateConversationRequestSchema,
   type ConversationDto,
   type CreateConversationResponse,
   type MessageListResponse,
   type ServiceEvent,
+  type StopConversationResponse,
 } from '@agent-studio/shared'
 import { toSseFrame } from '@agent-studio/shared'
 import type { AppContext } from '../context.js'
@@ -73,6 +75,34 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: AppContext
     const conversationId = conversationIdOf(request)
     const body = parseInput(updateConversationConfigRequestSchema, request.body ?? {}, '对话配置')
     return ctx.conversations.updateConfig(conversationId, body)
+  })
+
+  /** 重命名（只影响展示标题）。 */
+  app.patch('/api/conversations/:id', async (request): Promise<ConversationDto> => {
+    const conversationId = conversationIdOf(request)
+    const body = parseInput(updateConversationRequestSchema, request.body ?? {}, '对话重命名请求')
+    return ctx.conversations.rename(conversationId, body.title)
+  })
+
+  /** 删除对话（运行中拒绝）。 */
+  app.delete('/api/conversations/:id', async (request, reply) => {
+    const conversationId = conversationIdOf(request)
+    ctx.conversations.remove(conversationId)
+    reply.status(204).send()
+  })
+
+  /**
+   * 停止当前轮次。
+   *
+   * SDK 没有单轮取消接口，停止 = 关闭承载该对话的运行时；如果同一运行时上还有别的
+   * 对话在跑，会返回 409 `RUNTIME_BUSY`，避免误伤（review P1）。
+   */
+  app.post('/api/conversations/:id/stop', async (request): Promise<StopConversationResponse> => {
+    const conversationId = conversationIdOf(request)
+    ctx.conversations.getOrThrow(conversationId)
+    const result = await ctx.pool.stop(conversationId)
+    ctx.conversations.markIdle(conversationId)
+    return { ok: true, runtimeClosed: result.runtimeClosed, ...(result.note === undefined ? {} : { note: result.note }) }
   })
 
   app.get('/api/conversations/:id/messages', async (request): Promise<MessageListResponse> => {

@@ -1,186 +1,171 @@
+/**
+ * MCP：凭据引用、运行时 patch 渲染与探测目标（review P0-3 的回归测试）。
+ *
+ * 核心断言：**凭据值永远不出现在生成的 YAML 里**，只有 `!!js process.env.X` 引用；
+ * 真实值只在子进程环境 / 探测请求里出现。
+ */
 import fs from 'node:fs'
 import path from 'node:path'
-import YAML from 'yaml'
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { McpServerDefinition } from '@agent-studio/shared'
-import { mcpServerDefinitionSchema } from '@agent-studio/shared'
-import { silentLogger } from '../../src/logger.js'
-import { McpConfig, resolvePlaceholders } from '../../src/mcp/McpConfig.js'
+import { McpConfig, parseValueExpression, resolvePathPlaceholders } from '../../src/mcp/McpConfig.js'
 import { renderMcpPatch } from '../../src/runtime/SnapshotMaterializer.js'
+import { silentLogger } from '../../src/logger.js'
 import { makeTempDir } from '../helpers.js'
 
-const scratch: string[] = []
+const REPO_ROOT = 'E:/repo'
 
-function fixture(servers: unknown[]): {
-  mcp: McpConfig
-  configPath: string
-  workspace: string
-  repoRoot: string
-} {
-  const root = makeTempDir('mcp')
-  scratch.push(root)
-  const configPath = path.join(root, 'config', 'mcp-servers.json')
+function writeConfig(root: string, servers: unknown[]): string {
+  const configPath = path.join(root, 'mcp-servers.json')
   fs.mkdirSync(path.dirname(configPath), { recursive: true })
-  fs.writeFileSync(configPath, JSON.stringify({ servers }, null, 2), 'utf8')
-  const workspace = path.join(root, 'workspace')
-  fs.mkdirSync(workspace, { recursive: true })
-  const mcp = new McpConfig({
+  fs.writeFileSync(configPath, `${JSON.stringify({ servers }, null, 2)}\n`, 'utf8')
+  return configPath
+}
+
+function createConfig(configPath: string, env: Record<string, string>): McpConfig {
+  return new McpConfig({
     configPath,
     logger: silentLogger,
-    repoRoot: 'E:/Code/OceansLabWeb/dsh_oceanslab',
-    env: { DATA_CENTER_TOKEN: 'secret-token', GIS_SERVICE_TOKEN: 'gis-token' },
+    repoRoot: REPO_ROOT,
+    env: env as NodeJS.ProcessEnv,
   })
-  return { mcp, configPath, workspace, repoRoot: root }
 }
 
-function definition(partial: Record<string, unknown>): McpServerDefinition {
-  return mcpServerDefinitionSchema.parse(partial)
-}
-
-const STDIO = {
+const STDIO_SERVER = {
   id: 'data-center',
   name: '数据中心',
-  description: '查询数据集目录',
   transport: 'stdio',
   command: 'node',
   args: ['${REPO_ROOT}/scripts/mcp-data-center-server.mjs'],
   env: { DATA_CENTER_TOKEN: '${DATA_CENTER_TOKEN}' },
-  toolCallTimeoutMs: 30_000,
-  failOnStartup: true,
+  headers: {},
+  toolCallTimeoutMs: 30000,
+  failOnStartup: false,
   enabled: true,
 }
 
-const HTTP = {
-  id: 'gis-service',
-  name: 'GIS 服务',
-  transport: 'streamable-http',
-  url: 'http://127.0.0.1:9100/mcp',
-  headers: { Authorization: 'Bearer ${GIS_SERVICE_TOKEN}' },
-  enabled: true,
-}
+describe('parseValueExpression', () => {
+  it('整个值是引用 → env', () => {
+    expect(parseValueExpression('${TOKEN}')).toEqual({ kind: 'env', name: 'TOKEN' })
+  })
 
-interface PatchEntry {
-  insert: Array<{ id: string; name: string; config: Record<string, unknown> }>
-}
+  it('内嵌引用 → template（记录所有变量名）', () => {
+    expect(parseValueExpression('Bearer ${TOKEN}')).toEqual({
+      kind: 'template',
+      template: 'Bearer ${TOKEN}',
+      names: ['TOKEN'],
+    })
+  })
 
-function parsePatch(yaml: string): PatchEntry[] {
-  return YAML.parse(yaml) as PatchEntry[]
-}
-
-afterAll(() => {
-  for (const dir of scratch) fs.rmSync(dir, { recursive: true, force: true })
+  it('字面量原样保留', () => {
+    expect(parseValueExpression('http://localhost:9100/mcp')).toEqual({
+      kind: 'literal',
+      value: 'http://localhost:9100/mcp',
+    })
+  })
 })
 
-describe('runtime/mcpOverlay', () => {
-  it('stdio：渲染 transport/serverName/command/args/env/cwd/toolCallTimeoutMs/failOnStartupError', () => {
-    const { mcp, workspace } = fixture([STDIO])
-    const resolved = mcp.resolve(mcp.assertKnown(['data-center'])[0] as McpServerDefinition)
-    const parsed = parsePatch(renderMcpPatch([resolved], workspace))
-
-    expect(parsed).toHaveLength(1)
-    const entry = parsed[0]?.insert[0]
-    expect(entry?.id).toBe('mcp-client-data-center')
-    expect(entry?.name).toBe('@deepseek-ai/dsh-mcp-client')
-    expect(entry?.config).toMatchObject({
-      transport: 'stdio',
-      serverName: 'data-center',
-      command: 'node',
-      toolCallTimeoutMs: 30_000,
-      failOnStartupError: true,
-      // ${REPO_ROOT} 始终可用，${DATA_CENTER_TOKEN} 从服务环境解析。
-      args: ['E:/Code/OceansLabWeb/dsh_oceanslab/scripts/mcp-data-center-server.mjs'],
-      env: { DATA_CENTER_TOKEN: 'secret-token' },
-    })
-    expect(entry?.config.cwd).toBe(workspace.replaceAll('\\', '/'))
+describe('resolvePathPlaceholders', () => {
+  it('展开 ${REPO_ROOT}', () => {
+    expect(resolvePathPlaceholders('${REPO_ROOT}/scripts/x.mjs', REPO_ROOT, 'args')).toBe(
+      'E:/repo/scripts/x.mjs',
+    )
   })
 
-  it('streamable-http：渲染 url + 解析后的 headers，不带 cwd/env', () => {
-    const { mcp, workspace } = fixture([HTTP])
-    const resolved = mcp.resolve(mcp.assertKnown(['gis-service'])[0] as McpServerDefinition)
-    const entry = parsePatch(renderMcpPatch([resolved], workspace))[0]?.insert[0]
+  it('把凭据写在 command/args/url 里直接报错', () => {
+    expect(() => resolvePathPlaceholders('${SECRET}', REPO_ROOT, 'args')).toThrow(/env \/ headers/)
+  })
+})
 
-    expect(entry?.config).toMatchObject({
-      transport: 'streamable-http',
-      serverName: 'gis-service',
-      url: 'http://127.0.0.1:9100/mcp',
-      headers: { Authorization: 'Bearer gis-token' },
-    })
-    expect(entry?.config.cwd).toBeUndefined()
+describe('McpConfig.resolveForRuntime', () => {
+  it('只保留引用，不展开真实值', () => {
+    const root = makeTempDir('mcp-ref-')
+    const config = createConfig(writeConfig(root, [STDIO_SERVER]), { DATA_CENTER_TOKEN: 'super-secret' })
+    const definition = config.get('data-center') as McpServerDefinition
+    const runtime = config.resolveForRuntime(definition)
+
+    expect(runtime.env.DATA_CENTER_TOKEN).toEqual({ kind: 'env', name: 'DATA_CENTER_TOKEN' })
+    expect(runtime.envNames).toEqual(['DATA_CENTER_TOKEN'])
+    expect(runtime.args[0]).toBe('E:/repo/scripts/mcp-data-center-server.mjs')
+    // 任何地方都不应出现真实值
+    expect(JSON.stringify(runtime)).not.toContain('super-secret')
   })
 
-  it('${ENV} 解析不到时报错，绝不写空值', () => {
-    const { mcp } = fixture([{ ...STDIO, env: { DATA_CENTER_TOKEN: '${MISSING_TOKEN}' } }])
-    const resolved = mcp.assertKnown(['data-center'])[0] as McpServerDefinition
-    expect(() => mcp.resolve(resolved)).toThrow(/MISSING_TOKEN/)
+  it('引用了未设置的变量 → 立即失败（fail closed）', () => {
+    const root = makeTempDir('mcp-missing-')
+    const config = createConfig(writeConfig(root, [STDIO_SERVER]), {})
+    const definition = config.get('data-center') as McpServerDefinition
+    expect(() => config.resolveForRuntime(definition)).toThrow(/未设置的环境变量/)
   })
 
-  it('未知 / 未启用的服务器抛 MCP_UNKNOWN，并附带可用项', () => {
-    const { mcp } = fixture([STDIO, { ...HTTP, enabled: false }])
+  it('stdio 缺 command → 400', () => {
+    const root = makeTempDir('mcp-nocmd-')
+    const config = createConfig(
+      writeConfig(root, [{ ...STDIO_SERVER, command: undefined, env: {} }]),
+      {},
+    )
+    const definition = config.get('data-center') as McpServerDefinition
+    expect(() => config.resolveForRuntime(definition)).toThrow(/缺少 command/)
+  })
+})
 
-    let error: unknown
-    try {
-      mcp.assertKnown(['nope', 'gis-service'])
-    } catch (caught) {
-      error = caught
-    }
-    expect(error).toMatchObject({ code: 'MCP_UNKNOWN' })
-    expect((error as { details?: { unknown?: string[]; available?: string[] } }).details).toMatchObject({
-      unknown: ['nope', 'gis-service'],
-      available: ['data-center'],
-    })
+describe('renderMcpPatch（凭据不落盘）', () => {
+  it('stdio：env 渲染成 !!js 引用，YAML 里没有真实 token', () => {
+    const root = makeTempDir('mcp-render-')
+    const config = createConfig(writeConfig(root, [STDIO_SERVER]), { DATA_CENTER_TOKEN: 'super-secret' })
+    const definition = config.get('data-center') as McpServerDefinition
+    const yaml = renderMcpPatch([config.resolveForRuntime(definition)], 'E:/runtime/workspace')
+
+    expect(yaml).toContain('serverName: "data-center"')
+    expect(yaml).toContain('DATA_CENTER_TOKEN: !!js')
+    expect(yaml).toContain('process.env.DATA_CENTER_TOKEN')
+    expect(yaml).not.toContain('super-secret')
   })
 
-  it('没有选中服务器时写顶层空数组（YAML 解析为 []，不是 undefined）', () => {
-    const { workspace } = fixture([])
-    const parsed = parsePatch(renderMcpPatch([], workspace))
-    expect(parsed).toEqual([])
+  it('http：headers 支持内嵌模板', () => {
+    const root = makeTempDir('mcp-http-')
+    const config = createConfig(
+      writeConfig(root, [
+        {
+          id: 'gis-service',
+          name: 'GIS',
+          transport: 'streamable-http',
+          url: 'http://127.0.0.1:9100/mcp',
+          headers: { Authorization: 'Bearer ${GIS_TOKEN}' },
+          env: {},
+          args: [],
+          toolCallTimeoutMs: 5000,
+          failOnStartup: false,
+          enabled: true,
+        },
+      ]),
+      { GIS_TOKEN: 'secret-token' },
+    )
+    const definition = config.get('gis-service') as McpServerDefinition
+    const yaml = renderMcpPatch([config.resolveForRuntime(definition)], 'E:/w')
+
+    expect(yaml).toContain('transport: streamable-http')
+    expect(yaml).toContain('url: "http://127.0.0.1:9100/mcp"')
+    expect(yaml).toContain('Authorization: !!js')
+    expect(yaml).toContain('Bearer')
+    expect(yaml).toContain('process.env.GIS_TOKEN')
+    expect(yaml).not.toContain('secret-token')
   })
 
-  it('resolvePlaceholders：REPO_ROOT 优先于同名环境变量，未知变量报错', () => {
-    expect(
-      resolvePlaceholders('${REPO_ROOT}/a', {
-        env: { REPO_ROOT: '/from-env' },
-        available: { REPO_ROOT: '/repo' },
-        what: 'test',
-      }),
-    ).toBe('/repo/a')
-    expect(() => resolvePlaceholders('${NOPE}', { env: {}, what: 'test' })).toThrow(/NOPE/)
+  it('没有服务器时输出合法空数组', () => {
+    expect(renderMcpPatch([], 'E:/w')).toContain('[]')
   })
+})
 
-  it('definitions/summaries 读文件；文件缺失时返回空清单而不报错', () => {
-    const { mcp } = fixture([STDIO])
-    expect(mcp.summaries()).toEqual([
-      {
-        id: 'data-center',
-        name: '数据中心',
-        description: '查询数据集目录',
-        transport: 'stdio',
-        enabled: true,
-      },
-    ])
+describe('probeTarget', () => {
+  it('只在探测目标里出现真实值（用于连接测试）', () => {
+    const root = makeTempDir('mcp-probe-')
+    const config = createConfig(writeConfig(root, [STDIO_SERVER]), { DATA_CENTER_TOKEN: 'probe-secret' })
+    const definition = config.get('data-center') as McpServerDefinition
+    const target = config.probeTarget(definition, 20000)
 
-    const root = makeTempDir('mcp-missing')
-    scratch.push(root)
-    const missing = new McpConfig({
-      configPath: path.join(root, 'missing.json'),
-      logger: silentLogger,
-      repoRoot: root,
-      env: {},
-    })
-    expect(missing.summaries()).toEqual([])
-    expect(missing.assertKnown([])).toEqual([])
-  })
-
-  it('definition() 校验 id 只允许字母数字 - _', () => {
-    expect(() => definition({ ...STDIO, id: 'bad id!' })).toThrow()
-    // 默认值：transport=stdio / args=[] / enabled=true / toolCallTimeoutMs=30000
-    const minimal = definition({ id: 'x', name: 'X' })
-    expect(minimal).toMatchObject({
-      transport: 'stdio',
-      args: [],
-      enabled: true,
-      failOnStartup: false,
-      toolCallTimeoutMs: 30_000,
-    })
+    expect(target.env.DATA_CENTER_TOKEN).toBe('probe-secret')
+    expect(target.command).toBe('node')
+    expect(target.timeoutMs).toBe(20000)
   })
 })

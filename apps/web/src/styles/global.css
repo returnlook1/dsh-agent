@@ -1036,3 +1036,258 @@ pre,
 .field__hint--danger {
   color: var(--as-danger, #d9463f);
 }
+
+/* ------------------------------------------------- MCP 测试 / 工具预览 */
+
+.mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.mcp-server {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid var(--as-border);
+  border-radius: var(--as-radius-sm);
+  background: var(--as-surface);
+}
+
+.mcp-server__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.mcp-server__name {
+  overflow: hidden;
+  max-width: 120px;
+  color: var(--as-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mcp-server__spacer {
+  flex: 1 1 auto;
+}
+
+.mcp-server__desc {
+  color: var(--as-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mcp-server__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  color: var(--as-text-2);
+  font-size: 11px;
+}
+
+.mcp-server__ok {
+  color: var(--as-success);
+  font-weight: 600;
+}
+
+.mcp-server__fail {
+  color: var(--as-danger);
+  font-weight: 600;
+}
+
+.mcp-server__error-text {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--as-danger);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.mcp-server__error-detail {
+  flex-basis: 100%;
+  color: var(--as-text-2);
+}
+
+.mcp-server__error-detail summary,
+.mcp-tool__schema summary,
+.tool-call__result summary {
+  color: var(--as-text-2);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mcp-server__error-detail pre {
+  max-height: 140px;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--as-surface-2);
+  color: var(--as-danger);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--as-space-4);
+}
+
+.mcp-tools__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--as-radius-sm);
+  background: var(--as-surface-2);
+}
+
+.mcp-tools__meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--as-space-2);
+  min-width: 0;
+  font-size: 12px;
+}
+
+.mcp-tools__meta-row .meta-row__k {
+  flex: 0 0 76px;
+  padding-top: 0;
+}
+
+.mcp-tools__meta-row .meta-row__v {
+  font-size: 12px;
+}
+
+.mcp-tools__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--as-space-2);
+  color: var(--as-text-3);
+  font-size: 12px;
+}
+
+.mcp-tools__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-tools__error {
+  color: var(--as-danger);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--as-space-2);
+}
+
+.mcp-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--as-border);
+  border-radius: var(--as-radius-sm);
+}
+
+.mcp-tool__name {
+  color: var(--as-text);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool__desc {
+  color: var(--as-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool__schema pre {
+  max-height: 220px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--as-surface-2);
+  color: var(--as-text-2);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------- 工具结果展示 */
+
+.tool-call__map-action {
+  padding: 5px 10px 6px;
+  border-top: 1px solid var(--as-border);
+  background: var(--as-accent-soft);
+  color: var(--as-accent);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.tool-call__result {
+  border-top: 1px solid var(--as-border);
+}
+
+.tool-call__result summary {
+  padding: 5px 10px;
+}
+
+.tool-call__result-json,
+.tool-call__result-text {
+  max-height: 220px;
+  margin: 0;
+  padding: 6px 10px 8px;
+  overflow: auto;
+  background: var(--as-surface-2);
+  color: var(--as-text-2);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tool-call__result-note {
+  padding: 0 10px 8px;
+  color: var(--as-text-3);
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------ 对话操作（头部） */
+
+.chat-panel__meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--as-space-2);
+}

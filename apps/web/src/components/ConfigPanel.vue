@@ -152,6 +152,9 @@ async function refreshModels(): Promise<void> {
         <p v-if="config.mcpConfigPath.length > 0" class="field__hint">
           只读列表，来源：{{ config.mcpConfigPath }}
         </p>
+        <p v-if="config.mcpDshSource.length > 0" class="field__hint">
+          来自 DSH Profile: {{ config.mcpDshSource }}
+        </p>
       </div>
 
       <div class="field">

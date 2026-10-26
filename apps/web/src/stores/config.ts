@@ -8,6 +8,7 @@
 import type {
   AgentConfig,
   AgentConfigPatch,
+  McpProbeResponse,
   McpServerSummaryDto,
   ModelCatalogResponse,
   ModelOption,
@@ -21,12 +22,26 @@ import { computed, ref } from 'vue'
 import { uniqueStrings } from '../constants'
 import {
   describeApiError,
+  describeMcpProbeError,
+  describeMcpProbeFailure,
   getMcpServers,
+  getMcpServerTools,
   getModels,
   getProjectAgentConfig,
   getSkills,
   putProjectAgentConfig,
+  testMcpServer,
 } from '../services/agent-api'
+
+/** 单个 MCP 服务器的探测状态（行内测试 + 工具预览共用）。 */
+export interface McpProbeState {
+  phase: 'testing' | 'success' | 'error'
+  result: McpProbeResponse | null
+  error: string | null
+  testedAt: number
+}
+
+export type McpProbeMode = 'test' | 'tools'
 
 export const useConfigStore = defineStore('config', () => {
   const projectId = ref('default')
@@ -34,6 +49,13 @@ export const useConfigStore = defineStore('config', () => {
   const skills = ref<SkillSummaryDto[]>([])
   const mcpServers = ref<McpServerSummaryDto[]>([])
   const mcpConfigPath = ref('')
+  /** `GET /api/mcp-servers` 的 `dshSource`（从既有 DSH Profile 导入时存在）。 */
+  const mcpDshSource = ref('')
+
+  /** 每个 MCP 服务器的探测状态（按 serverId 索引）。 */
+  const mcpProbeStates = ref<Record<string, McpProbeState>>({})
+  /** 同一服务器同一时刻只允许一个探测请求；后来的调用复用同一个 Promise。 */
+  const mcpProbeInflight = new Map<string, Promise<McpProbeResponse | null>>()
 
   const selectedSkills = ref<string[]>([])
   const selectedMcpServers = ref<string[]>([])
@@ -135,7 +157,9 @@ export const useConfigStore = defineStore('config', () => {
     if (mcpResult.status === 'fulfilled') {
       mcpServers.value = mcpResult.value.servers
       mcpConfigPath.value = mcpResult.value.configPath
+      mcpDshSource.value = mcpResult.value.dshSource ?? ''
     } else {
+      mcpDshSource.value = ''
       problems.push(`MCP 清单：${describeApiError(mcpResult.reason)}`)
     }
     if (modelResult.status === 'fulfilled') {
@@ -165,6 +189,67 @@ export const useConfigStore = defineStore('config', () => {
     } finally {
       modelsLoading.value = false
     }
+  }
+
+  function setProbeState(serverId: string, state: McpProbeState): void {
+    mcpProbeStates.value = { ...mcpProbeStates.value, [serverId]: state }
+  }
+
+  /** 清掉某个服务器的探测状态（行内错误 / SideSheet Banner 关闭）。 */
+  function clearMcpProbeState(serverId: string): void {
+    const next = { ...mcpProbeStates.value }
+    delete next[serverId]
+    mcpProbeStates.value = next
+  }
+
+  /**
+   * 测试 MCP 服务器（`POST /mcp-servers/:id/test`）或重新拉取工具清单
+   * （`GET /mcp-servers/:id/tools`）。
+   *
+   * - 单次最长可达 ~25s，因此请求异步执行，状态按 serverId 独立维护；
+   * - 同一服务器并发点击时复用同一个 Promise，绝不重复发请求；
+   * - 失败原因（超时 / 连接失败 / 契约错误）写进 `mcpProbeStates` 供行内展开。
+   */
+  async function probeMcpServer(
+    serverId: string,
+    mode: McpProbeMode = 'test',
+  ): Promise<McpProbeResponse | null> {
+    const inflight = mcpProbeInflight.get(serverId)
+    if (inflight !== undefined) return inflight
+
+    const previous = mcpProbeStates.value[serverId]
+    setProbeState(serverId, {
+      phase: 'testing',
+      result: previous?.result ?? null,
+      error: null,
+      testedAt: previous?.testedAt ?? 0,
+    })
+
+    const request = (async (): Promise<McpProbeResponse | null> => {
+      try {
+        const probe = mode === 'tools' ? await getMcpServerTools(serverId) : await testMcpServer(serverId)
+        setProbeState(serverId, {
+          phase: probe.ok ? 'success' : 'error',
+          result: probe,
+          error: probe.ok ? null : describeMcpProbeFailure(probe),
+          testedAt: Date.now(),
+        })
+        return probe
+      } catch (error) {
+        setProbeState(serverId, {
+          phase: 'error',
+          result: null,
+          error: describeMcpProbeError(error),
+          testedAt: Date.now(),
+        })
+        return null
+      } finally {
+        mcpProbeInflight.delete(serverId)
+      }
+    })()
+
+    mcpProbeInflight.set(serverId, request)
+    return request
   }
 
   /** 切换 provider 时自动把模型切到它的第一项。 */
@@ -279,6 +364,10 @@ export const useConfigStore = defineStore('config', () => {
     skillOptions,
     mcpServers,
     mcpConfigPath,
+    mcpDshSource,
+    mcpProbeStates,
+    probeMcpServer,
+    clearMcpProbeState,
     selectedSkills,
     selectedMcpServers,
     provider,

@@ -63,6 +63,27 @@ export const updateConversationConfigRequestSchema = z.object({
 }) satisfies z.ZodType<AgentConfigPatch>
 export type UpdateConversationConfigRequest = z.infer<typeof updateConversationConfigRequestSchema>
 
+/** `PATCH /api/conversations/:id`：只允许改标题。 */
+export const updateConversationRequestSchema = z.object({
+  title: z.string().min(1).max(200),
+})
+export type UpdateConversationRequest = z.infer<typeof updateConversationRequestSchema>
+
+/**
+ * `POST /api/conversations/:id/stop` 的响应。
+ *
+ * 注意：SDK 没有"取消单轮"的接口，停止 = 关闭承载该对话的运行时；
+ * 如果同一运行时上还有别的对话在跑，服务会拒绝（`RUNTIME_BUSY`），
+ * 避免误伤其它对话。
+ */
+export interface StopConversationResponse {
+  ok: boolean
+  /** 是否真的关闭了运行时。 */
+  runtimeClosed: boolean
+  /** 附加说明（例如"运行时上还有其它对话在运行"）。 */
+  note?: string
+}
+
 /** 列表项（history）。 */
 export interface ConversationSummary {
   id: string

@@ -23,6 +23,7 @@ import { agentConfigSchema, mergeAgentConfig, unique } from '@agent-studio/share
 import type { Logger } from '../logger.js'
 import { conversationRunning, conversationStarted, modelUnavailable, modelUnknown, notFound } from '../http/errors.js'
 import type { ModelCatalogService } from '../models/ModelCatalogService.js'
+import type { CapabilityRevision } from '../runtime/CapabilityRevision.js'
 import type { McpConfig } from '../mcp/McpConfig.js'
 import type { SkillSource } from '../skills/SkillSource.js'
 import type { Store } from '../store/Store.js'
@@ -64,6 +65,8 @@ export interface ConversationServiceDeps {
   mcp: McpConfig
   /** 模型清单（权威来源是 DSH；这里只做默认值与校验）。 */
   models: ModelCatalogService
+  /** 能力版本（技能内容 / MCP 定义 / profile 模板）。 */
+  revision: CapabilityRevision
   logger: Logger
   now?: () => number
 }
@@ -96,9 +99,11 @@ export class ConversationService {
   }
 
   private snapshot(config: AgentConfig, projectId: string, inheritedFromProject: boolean): AgentConfigSnapshot {
+    const capabilityRevision = this.deps.revision.compute(config.skills, config.mcpServers)
     return {
       ...config,
-      configKey: computeConfigKey(config),
+      configKey: computeConfigKey({ ...config, capabilityRevision }),
+      capabilityRevision,
       projectId,
       createdAt: this.now(),
       inheritedFromProject,
@@ -196,9 +201,11 @@ export class ConversationService {
       ),
     )
 
+    const capabilityRevision = this.deps.revision.compute(nextConfig.skills, nextConfig.mcpServers)
     const snapshot: AgentConfigSnapshot = {
       ...nextConfig,
-      configKey: computeConfigKey(nextConfig),
+      configKey: computeConfigKey({ ...nextConfig, capabilityRevision }),
+      capabilityRevision,
       projectId: current.projectId,
       createdAt: current.createdAt,
       inheritedFromProject: current.inheritedFromProject,
@@ -211,6 +218,23 @@ export class ConversationService {
     return snapshot
   }
 
+  /** PATCH /api/conversations/:id —— 只改展示标题。 */
+  rename(conversationId: string, title: string): ConversationDto {
+    this.getOrThrow(conversationId)
+    const updated = this.deps.store.updateConversation(conversationId, { title, updatedAt: this.now() })
+    if (updated === undefined) throw notFound(`对话不存在: ${conversationId}`)
+    this.deps.logger.info('conversation renamed', { conversationId })
+    return updated
+  }
+
+  /** DELETE /api/conversations/:id —— 运行中不允许删除。 */
+  remove(conversationId: string): void {
+    const record = this.getOrThrow(conversationId)
+    if (record.status === 'running') throw conversationRunning()
+    this.deps.store.deleteConversation(conversationId)
+    this.deps.messages.remove(conversationId)
+    this.deps.logger.info('conversation deleted', { conversationId })
+  }
   messages(conversationId: string): MessageListResult {
     this.getOrThrow(conversationId)
     return this.deps.messages.list(conversationId)

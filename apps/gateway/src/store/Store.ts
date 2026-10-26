@@ -148,6 +148,14 @@ export class Store {
     return record
   }
 
+  /** 删除对话记录（不存在时返回 false）。 */
+  deleteConversation(id: string): boolean {
+    if (this.state.conversations[id] === undefined) return false
+    delete this.state.conversations[id]
+    this.persist()
+    return true
+  }
+
   updateConversation(id: string, patch: Partial<Omit<ConversationDto, 'id'>>): ConversationDto | undefined {
     const current = this.state.conversations[id]
     if (current === undefined) return undefined

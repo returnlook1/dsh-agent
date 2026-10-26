@@ -46,6 +46,14 @@ export interface ToolCompletedEvent extends ServiceEventBase {
   success: boolean
   error?: string
   durationMs?: number
+  /**
+   * 结构化结果（能解析成 JSON 时）：例如 `map_fly_to` 返回
+   * `{ action: "flyTo", longitude, latitude, zoom }`，前端可据此直接操作地图。
+   * 只有成功且结果可解析时才出现；超过 4KB 的结果不内联（用 resultText 兜底）。
+   */
+  result?: unknown
+  /** 结果的纯文本形式（截断到 4KB），无结构化结果时用于展示。 */
+  resultText?: string
 }
 
 /** 本轮失败（模型错误、运行时不可用、超限等）。 */
@@ -112,6 +120,8 @@ export const serviceEventSchema: z.ZodType<ServiceEvent> = z.discriminatedUnion(
     success: z.boolean(),
     error: z.string().optional(),
     durationMs: z.number().optional(),
+    result: z.unknown().optional(),
+    resultText: z.string().optional(),
     at: z.number(),
   }),
   z.object({

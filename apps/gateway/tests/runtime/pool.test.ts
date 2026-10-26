@@ -88,6 +88,8 @@ function createPoolFixture(
     maxRuntimes?: number
     runtimeIdleMs?: number
     turnTimeoutMs?: number
+    initializeDelayMs?: number
+    resumeError?: string
   } = {},
 ): PoolFixture {
   const root = makeTempDir('pool')
@@ -118,7 +120,10 @@ function createPoolFixture(
   const mcp: McpConfig = new Mcp({ configPath: mcpConfigPath, logger: silentLogger, repoRoot: root, env: {} })
   const materializer = new SnapshotMaterializer({ config, logger: silentLogger, skills, mcp })
 
-  const fake = createFakeClientFactory(options.script)
+  const fake = createFakeClientFactory(options.script, {
+    ...(options.initializeDelayMs === undefined ? {} : { initializeDelayMs: options.initializeDelayMs }),
+    ...(options.resumeError === undefined ? {} : { resumeError: options.resumeError }),
+  })
   const sink = new FakeSink()
   const hub = new SseHub(silentLogger)
   const pool = new RuntimePool({
@@ -148,6 +153,7 @@ function createPoolFixture(
     return {
       ...base,
       configKey: computeConfigKey(base),
+      capabilityRevision: 'test',
       projectId: 'p1',
       createdAt: 1_000,
       inheritedFromProject: true,
@@ -379,5 +385,98 @@ describe('runtime/RuntimePool', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'message.failed', code: 'TIMEOUT' })])
     expect(fixture.fake.clients[0]?.closeCalls).toBe(1)
     expect(fixture.pool.status()).toHaveLength(0)
+  })
+})
+
+describe('并发冷启动与恢复失败（review P0-2 / P0-4）', () => {
+  it('10 个同配置对话同时冷启动，只创建 1 个运行时', async () => {
+    const { pool, snapshot } = createPoolFixture({ initializeDelayMs: 60 })
+    const config = snapshot()
+
+    const turns = Array.from({ length: 10 }, (_item, index) =>
+      pool.send({
+        conversationId: `conv-${index}`,
+        sessionId: `dsh-${index}`,
+        config,
+        text: `你好 ${index}`,
+        hasHistory: false,
+      }),
+    )
+    const results = await Promise.all(turns)
+
+    expect(results).toHaveLength(10)
+    const status = pool.status()
+    expect(status).toHaveLength(1)
+    expect(status[0]?.conversationCount).toBe(10)
+    // 10 个会话各自完成一轮，但运行时只有 1 个
+    expect(results.every((result) => result.outcome === 'idle')).toBe(true)
+  })
+
+  it('已有历史的会话恢复失败时，明确报错而不是新建空白会话', async () => {
+    const { pool, fake, snapshot } = createPoolFixture({ resumeError: 'session "dsh-old" not found' })
+    const config = snapshot()
+
+    await expect(
+      pool.send({
+        conversationId: 'conv-old',
+        sessionId: 'dsh-old',
+        config,
+        text: '还记得上文吗？',
+        hasHistory: true,
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_RESTORE_FAILED' })
+
+    // 没有发出任何 prompt（否则就是悄悄开了新会话）
+    expect(fake.clients[0]?.prompts).toHaveLength(0)
+  })
+
+  it('首次消息不调用 resume（由 prompt 创建会话）', async () => {
+    const { pool, fake, snapshot } = createPoolFixture()
+    await pool.send({
+      conversationId: 'conv-new',
+      sessionId: 'dsh-new',
+      config: snapshot(),
+      text: '第一次',
+      hasHistory: false,
+    })
+    expect(fake.clients[0]?.resumed).toHaveLength(0)
+    expect(fake.clients[0]?.prompts).toHaveLength(1)
+  })
+
+  it('stop：唯一运行中的对话会关闭运行时；有其它对话在跑时拒绝', async () => {
+    const { pool, snapshot } = createPoolFixture({ script: noIdleScript })
+    const config = snapshot()
+
+    const first = pool.send({
+      conversationId: 'conv-a',
+      sessionId: 'dsh-a',
+      config,
+      text: '跑很久',
+      hasHistory: false,
+    })
+    const second = pool.send({
+      conversationId: 'conv-b',
+      sessionId: 'dsh-b',
+      config,
+      text: '也跑很久',
+      hasHistory: false,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    await expect(pool.stop('conv-a')).rejects.toMatchObject({ code: 'RUNTIME_BUSY' })
+
+    // 关闭全部运行时让两个挂起的 turn 收尾（否则测试会一直等）。
+    await pool.closeAll()
+    const [firstResult, secondResult] = await Promise.all([first, second])
+    expect(firstResult.outcome).toBe('failed')
+    expect(secondResult.outcome).toBe('failed')
+  })
+
+  it('stop：没有在跑的对话时返回 runtimeClosed=false（不误杀运行时）', async () => {
+    const { pool, snapshot } = createPoolFixture()
+    const result = await pool.stop('conv-idle')
+    expect(result).toEqual({ runtimeClosed: false, note: '该对话当前没有正在执行的轮次' })
+    expect(pool.status()).toHaveLength(0)
+    expect(snapshot()).toBeDefined()
   })
 })

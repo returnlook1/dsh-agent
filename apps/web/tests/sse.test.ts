@@ -171,6 +171,85 @@ describe('readServiceEventStream', () => {
   })
 })
 
+describe('tool.completed 结果字段', () => {
+  it('保留结构化 result 与文本 resultText', () => {
+    const event = parseServiceEventFrame({
+      event: 'tool.completed',
+      data: JSON.stringify({
+        type: 'tool.completed',
+        conversationId: 'c1',
+        at: 20,
+        callId: 'call-map',
+        tool: 'map_fly_to',
+        success: true,
+        durationMs: 21,
+        result: { action: 'flyTo', longitude: 121.5, latitude: 31.2, zoom: 8 },
+        resultText: '已定位到上海',
+      }),
+    })
+    expect(event).toMatchObject({
+      type: 'tool.completed',
+      callId: 'call-map',
+      success: true,
+      result: { action: 'flyTo', longitude: 121.5, latitude: 31.2, zoom: 8 },
+      resultText: '已定位到上海',
+    })
+  })
+
+  it('不假设 result 的形状：数组 / null / 字符串原样透传', () => {
+    for (const result of [[1, 2, 3], null, 'plain', 42]) {
+      const event = toServiceEvent({
+        type: 'tool.completed',
+        conversationId: 'c1',
+        at: 21,
+        callId: 'call-x',
+        tool: 't',
+        success: true,
+        result,
+      })
+      expect(event).toMatchObject({ result })
+    }
+  })
+
+  it('resultText 不是字符串时丢弃该字段，而非丢弃整个事件', () => {
+    const event = toServiceEvent({
+      type: 'tool.completed',
+      conversationId: 'c1',
+      at: 22,
+      callId: 'call-y',
+      tool: 't',
+      success: true,
+      error: 123,
+      durationMs: 'slow',
+      resultText: { nested: true },
+    })
+    expect(event).not.toBeNull()
+    expect(event).toMatchObject({ type: 'tool.completed', callId: 'call-y' })
+    if (event === null || event.type !== 'tool.completed') throw new Error('事件窄化失败')
+    expect(event.resultText).toBeUndefined()
+    expect(event.error).toBeUndefined()
+    expect(event.durationMs).toBeUndefined()
+  })
+
+  it('坏 JSON 帧不会抛错，流里后续合法事件仍被分发', async () => {
+    const events = await collect([
+      'event: tool.completed\n',
+      'data: {"type":"tool.completed","conversationId":"c1",\n\n',
+      frameOf({
+        type: 'tool.completed',
+        conversationId: 'c1',
+        at: 23,
+        callId: 'call-good',
+        tool: 't',
+        success: true,
+        result: { ok: true },
+      }),
+    ])
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ callId: 'call-good', result: { ok: true } })
+  })
+})
+
 describe('边界窄化', () => {
   it('缺少必填字段的事件返回 null', () => {
     expect(toServiceEvent({ type: 'message.completed', conversationId: 'c1', at: 1 })).toBeNull()

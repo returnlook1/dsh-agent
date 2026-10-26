@@ -274,6 +274,25 @@ export class TurnEventAdapter {
       }
     }
 
+    // 结构化结果：业务工具通常把 JSON 写在 text 块里（例如 map_fly_to 的 flyTo 指令）。
+    // 只解析单块、非错误、且不超过 4KB 的文本，避免把大结果塞进 SSE（review P1）。
+    const textBlocks = (Array.isArray(message.content) ? message.content : [])
+      .filter((block) => isRecord(block) && block.type === 'text' && typeof block.text === 'string')
+      .map((block) => (block as { text: string }).text)
+    const joined = textBlocks.join('\n').trim()
+    const resultText = joined.length === 0 ? undefined : joined.length > 4096 ? `${joined.slice(0, 4096)}…` : joined
+    let structured: unknown
+    if (!isError && textBlocks.length === 1 && resultText !== undefined && resultText.length <= 4096) {
+      const candidate = resultText.trim()
+      if (candidate.startsWith('{') || candidate.startsWith('[')) {
+        try {
+          structured = JSON.parse(candidate)
+        } catch {
+          structured = undefined
+        }
+      }
+    }
+
     this.deps.publish({
       type: 'tool.completed',
       conversationId: this.deps.conversationId,
@@ -282,6 +301,8 @@ export class TurnEventAdapter {
       success: !isError,
       ...(errorText === undefined ? {} : { error: errorText }),
       ...(durationMs === undefined ? {} : { durationMs }),
+      ...(structured === undefined ? {} : { result: structured }),
+      ...(resultText === undefined ? {} : { resultText }),
       at: this.now(),
     })
   }

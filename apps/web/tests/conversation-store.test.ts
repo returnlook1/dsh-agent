@@ -28,6 +28,7 @@ function conversationDto(overrides: Partial<ConversationDto> = {}): Conversation
       model: 'deepseek-flash',
       systemPrompt: '',
       configKey: 'key-1',
+      capabilityRevision: 'rev-1',
       projectId: 'default',
       createdAt: 1,
       inheritedFromProject: false,
@@ -246,5 +247,106 @@ describe('conversation store · ServiceEvent 归并', () => {
       durationMs: 9,
     })
     expect(store.messagesLoading).toBe(false)
+  })
+
+  it('tool.completed 的 result / resultText 归并进工具卡片', async () => {
+    stubFetch([
+      userStarted,
+      {
+        type: 'tool.started',
+        conversationId: 'conv-1',
+        at: 11,
+        callId: 'call-map',
+        tool: 'map_fly_to',
+      },
+      {
+        type: 'tool.completed',
+        conversationId: 'conv-1',
+        at: 12,
+        callId: 'call-map',
+        tool: 'map_fly_to',
+        success: true,
+        result: { action: 'flyTo', longitude: 121.5, latitude: 31.2, zoom: 8 },
+        resultText: '已定位',
+      },
+      assistantCompleted('msg-map', '完成', 13),
+    ])
+
+    await store.send('定位到上海')
+
+    const call = store.messages
+      .flatMap((message) => message.toolCalls)
+      .find((item) => item.callId === 'call-map')
+    expect(call).toMatchObject({
+      callId: 'call-map',
+      status: 'succeeded',
+      result: { action: 'flyTo', longitude: 121.5, latitude: 31.2, zoom: 8 },
+      resultText: '已定位',
+    })
+  })
+})
+
+describe('conversation store · 停止 / 删除操作', () => {
+  function stubStopFetch(stopBody: unknown, stopStatus = 200): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.endsWith('/stop')) {
+          return new Response(JSON.stringify(stopBody), {
+            status: stopStatus,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify(meta), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }),
+    )
+  }
+
+  it('停止成功：立即 idle、保留消息、运行中工具收尾', async () => {
+    store.current = conversationDto({ status: 'running' })
+    store.streaming = true
+    store.messages = [
+      {
+        id: 'msg-a',
+        role: 'assistant',
+        content: '已有的回答',
+        createdAt: 1,
+        toolCalls: [{ callId: 'call-1', tool: 'slow_tool', status: 'running' }],
+      },
+    ]
+    stubStopFetch({ ok: true, runtimeClosed: true, note: '已关闭运行时' })
+
+    const result = await store.stop()
+
+    expect(result.ok).toBe(true)
+    expect(store.streaming).toBe(false)
+    expect(store.current?.status).toBe('idle')
+    expect(store.error).toBeNull()
+    expect(store.messages).toHaveLength(1)
+    expect(store.messages[0]?.content).toBe('已有的回答')
+    expect(store.messages[0]?.toolCalls[0]).toMatchObject({
+      status: 'failed',
+      error: '本轮已手动停止',
+    })
+  })
+
+  it('409 RUNTIME_BUSY：保持运行状态并返回后端文案', async () => {
+    store.current = conversationDto({ status: 'running' })
+    store.streaming = true
+    stubStopFetch(
+      { error: { code: 'RUNTIME_BUSY', message: '该运行时上还有 1 个对话正在运行' } },
+      409,
+    )
+
+    const result = await store.stop()
+
+    expect(result).toMatchObject({ ok: false, conflict: true, code: 'RUNTIME_BUSY' })
+    expect(result.message).toContain('还有 1 个对话')
+    expect(store.streaming).toBe(true)
+    expect(store.current?.status).toBe('running')
   })
 })

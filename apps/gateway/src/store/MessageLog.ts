@@ -35,6 +35,16 @@ export class MessageLog {
   }
 
   /** 追加一条消息（单行 JSON + 换行）。 */
+  /** 删除某对话的消息文件（对话被删除时调用）。 */
+  remove(conversationId: string): void {
+    const file = this.fileFor(conversationId)
+    try {
+      fs.rmSync(file, { force: true })
+    } catch {
+      /* 文件不存在或已被删除 */
+    }
+  }
+
   append(message: MessageDto): MessageDto {
     const filePath = this.fileFor(message.conversationId)
     fs.mkdirSync(path.dirname(filePath), { recursive: true })

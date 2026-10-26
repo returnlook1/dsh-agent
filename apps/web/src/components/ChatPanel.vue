@@ -1,16 +1,43 @@
 <script setup lang="ts">
-import { Banner, Button, Empty, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
+import {
+  Banner,
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Popconfirm,
+  Spin,
+  Tag,
+  TextArea,
+  Typography,
+} from '@aifuxi/semi-ui-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import MessageBubble from '@/components/MessageBubble.vue'
 import { useConversationStore } from '@/stores/conversation'
+import { useUiStore } from '@/stores/ui'
 
 const conversation = useConversationStore()
+const ui = useUiStore()
+const router = useRouter()
 
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
+const renameVisible = ref(false)
+const renameDraft = ref('')
+const renameError = ref<string | null>(null)
+const actionNotice = ref<{
+  type: 'warning' | 'danger'
+  title: string
+  description: string
+} | null>(null)
+
 const current = computed(() => conversation.current)
+const isRunning = computed(
+  () => current.value !== null && (conversation.streaming || current.value.status === 'running'),
+)
 const canSubmit = computed(
   () => current.value !== null && !conversation.streaming && draft.value.trim().length > 0,
 )
@@ -82,6 +109,85 @@ function refresh(): void {
 function clearError(): void {
   conversation.clearError()
 }
+
+/** 停止本轮；409 RUNTIME_BUSY 只展示后端说明，不自动重试。 */
+async function stopTurn(): Promise<void> {
+  actionNotice.value = null
+  const result = await conversation.stop()
+  if (result.ok) {
+    ui.notifySuccess('已停止')
+    if (result.note !== undefined && result.note.length > 0) ui.notifyInfo(result.note)
+    return
+  }
+  const message = result.message ?? '停止失败'
+  const busy = result.conflict === true
+  actionNotice.value = {
+    type: busy ? 'warning' : 'danger',
+    title: busy ? '无法停止（RUNTIME_BUSY）' : '停止失败',
+    description: message,
+  }
+  ui.notifyError(message)
+}
+
+function openRename(): void {
+  if (current.value === null) return
+  renameDraft.value = current.value.title
+  renameError.value = null
+  renameVisible.value = true
+}
+
+function closeRename(): void {
+  if (conversation.renaming) return
+  renameVisible.value = false
+  renameError.value = null
+}
+
+async function submitRename(): Promise<void> {
+  if (conversation.renaming) return
+  const title = renameDraft.value.trim()
+  if (title.length === 0) {
+    renameError.value = '标题不能为空'
+    return
+  }
+  if (title.length > 200) {
+    renameError.value = '标题不能超过 200 个字符'
+    return
+  }
+  const result = await conversation.rename(title)
+  if (result.ok) {
+    renameVisible.value = false
+    renameError.value = null
+    ui.notifySuccess('已重命名')
+    return
+  }
+  renameError.value = result.message ?? '重命名失败'
+  ui.notifyError(renameError.value)
+}
+
+/** 删除当前对话；成功后清空会话并回到「新对话」态。 */
+async function removeCurrent(): Promise<void> {
+  actionNotice.value = null
+  const result = await conversation.deleteCurrent()
+  if (result.ok) {
+    ui.notifySuccess('对话已删除')
+    const projectId = result.projectId
+    try {
+      await router.push({ name: 'playground' })
+    } catch {
+      // 路由失败不影响已删除的本地会话；历史列表仍会刷新。
+    }
+    void conversation.loadHistory(projectId)
+    return
+  }
+  const message = result.message ?? '删除失败'
+  const running = result.conflict === true
+  actionNotice.value = {
+    type: running ? 'warning' : 'danger',
+    title: running ? '无法删除（对话正在运行）' : '删除对话失败',
+    description: message,
+  }
+  ui.notifyError(message)
+}
 </script>
 
 <template>
@@ -98,6 +204,46 @@ function clearError(): void {
           <span>运行中</span>
         </span>
         <Button
+          v-if="isRunning"
+          size="small"
+          type="danger"
+          theme="borderless"
+          :loading="conversation.stopping"
+          :disabled="conversation.stopping"
+          @click="stopTurn"
+        >
+          停止
+        </Button>
+        <Button
+          v-if="current !== null"
+          size="small"
+          theme="borderless"
+          :disabled="conversation.renaming"
+          @click="openRename"
+        >
+          重命名
+        </Button>
+        <Popconfirm
+          v-if="current !== null"
+          title="删除当前对话？"
+          content="删除后不可恢复，历史消息将一并移除。"
+          ok-text="删除"
+          cancel-text="取消"
+          ok-type="danger"
+          :disabled="conversation.deleting"
+          @confirm="removeCurrent"
+        >
+          <Button
+            size="small"
+            type="danger"
+            theme="borderless"
+            :loading="conversation.deleting"
+            :disabled="conversation.deleting"
+          >
+            删除
+          </Button>
+        </Popconfirm>
+        <Button
           v-if="current !== null"
           size="small"
           theme="borderless"
@@ -111,6 +257,15 @@ function clearError(): void {
 
     <div ref="scroller" class="chat-scroll">
       <div class="chat-column">
+        <Banner
+          v-if="actionNotice !== null"
+          :type="actionNotice.type"
+          :title="actionNotice.title"
+          @close="actionNotice = null"
+        >
+          <template #description>{{ actionNotice.description }}</template>
+        </Banner>
+
         <Banner
           v-if="conversation.error"
           type="danger"
@@ -202,4 +357,28 @@ function clearError(): void {
       </div>
     </footer>
   </section>
+
+  <Modal
+    :visible="renameVisible"
+    title="重命名对话"
+    ok-text="保存"
+    cancel-text="取消"
+    :confirm-loading="conversation.renaming"
+    @ok="submitRename"
+    @cancel="closeRename"
+  >
+    <div class="rename-form">
+      <Banner v-if="renameError" type="danger" title="重命名失败">
+        <template #description>{{ renameError }}</template>
+      </Banner>
+      <Input
+        v-model="renameDraft"
+        :max-length="200"
+        placeholder="输入 1–200 个字符的标题"
+        :disabled="conversation.renaming"
+        @enter-press="submitRename"
+      />
+      <p class="field__hint">保存后立即写入服务端（PATCH /conversations/:id）。</p>
+    </div>
+  </Modal>
 </template>

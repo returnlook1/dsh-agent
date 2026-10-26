@@ -59,9 +59,14 @@ async function request(baseUrl, pathname, options = {}, timeoutMs = 20_000) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
+    // 只在有 body 时声明 Content-Type：DELETE/POST 空 body 带 application/json 会被
+    // Fastify 判成 FST_ERR_CTP_EMPTY_JSON_BODY（400），这不是被测服务的问题。
     const response = await fetch(`${baseUrl}${pathname}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+      headers: {
+        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.headers ?? {}),
+      },
       signal: controller.signal,
     })
     const text = await response.text()
@@ -252,6 +257,8 @@ async function phaseA() {
     check('MCP 清单含 data-center', mcpIds.includes('data-center'), JSON.stringify(mcpIds))
     const disabledMcp = (mcp.body?.servers ?? []).find((server) => server.id === 'gis-service')
     check('禁用的服务器也列出但 enabled=false', disabledMcp === undefined || disabledMcp.enabled === false)
+    const dataCenter = (mcp.body?.servers ?? []).find((server) => server.id === 'data-center')
+    check('MCP 清单标注来源 config', dataCenter?.source === 'config', JSON.stringify(dataCenter))
 
     // ---- 项目配置
     const projectId = 'ocean-project'
@@ -363,6 +370,35 @@ async function phaseA() {
     const detail = await request(s.baseUrl, `/api/conversations/${conversationId}`)
     check('对话详情状态 idle', detail.body?.status === 'idle', JSON.stringify(detail.body?.status))
     check('对话详情消息数 > 0', (detail.body?.messageCount ?? 0) > 0, String(detail.body?.messageCount))
+    check('快照带能力版本', typeof detail.body?.config?.capabilityRevision === 'string' && detail.body.config.capabilityRevision.length > 0,
+      JSON.stringify(detail.body?.config?.capabilityRevision))
+
+    // ---- 重命名
+    const renamed = await request(s.baseUrl, `/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: '重命名后的对话' }),
+    })
+    check('PATCH 重命名成功', renamed.status === 200 && renamed.body?.title === '重命名后的对话', `status=${renamed.status} ${JSON.stringify(renamed.body?.title)}`)
+
+    // ---- 停止（idle 对话 → 不误杀运行时）
+    const stopped = await request(s.baseUrl, `/api/conversations/${conversationId}/stop`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+    check('对空闲对话调用 stop 返回 runtimeClosed=false',
+      stopped.status === 200 && stopped.body?.runtimeClosed === false,
+      `status=${stopped.status} ${JSON.stringify(stopped.body)}`)
+
+    // ---- 删除（第二对话）
+    const deleted = await request(s.baseUrl, `/api/conversations/${secondId}`, { method: 'DELETE' })
+    check('DELETE 对话返回 204', deleted.status === 204, `status=${deleted.status}`)
+    const gone = await request(s.baseUrl, `/api/conversations/${secondId}`)
+    check('删除后查询返回 404', gone.status === 404, `status=${gone.status}`)
+
+    // ---- 既有 DSH 配置来源（测试环境未配置 → enabled=false）
+    const dshSource = await request(s.baseUrl, '/api/dsh-source')
+    check('GET /api/dsh-source 可用且未启用', dshSource.status === 200 && dshSource.body?.enabled === false,
+      `status=${dshSource.status} ${JSON.stringify(dshSource.body)}`)
   } catch (error) {
     failures.push(`阶段 A 异常：${error?.stack ?? error}`)
     log(`  ✗ 异常：${error?.message ?? error}`)
@@ -396,12 +432,35 @@ async function phaseB() {
     const conversationId = withMcp.body?.conversationId
     check('快照包含 data-center', (withMcp.body?.config?.mcpServers ?? []).includes('data-center'), JSON.stringify(withMcp.body?.config?.mcpServers))
 
+    // ---- MCP 连接测试与工具列表（不依赖发消息）
+    const tested = await request(s.baseUrl, '/api/mcp-servers/data-center/test', {
+      method: 'POST',
+      body: JSON.stringify({ timeoutMs: 20000 }),
+    })
+    check('MCP 连接测试成功', tested.status === 200 && tested.body?.ok === true,
+      `status=${tested.status} ${JSON.stringify(tested.body?.error ?? tested.body)}`)
+    const toolNames = (tested.body?.tools ?? []).map((tool) => tool.name)
+    check('MCP 工具列表含 search_dataset', toolNames.includes('search_dataset'), JSON.stringify(toolNames))
+    check('MCP 握手返回协议版本', typeof tested.body?.protocolVersion === 'string' && tested.body.protocolVersion.length > 0,
+      JSON.stringify(tested.body?.protocolVersion))
+    const toolsOnly = await request(s.baseUrl, '/api/mcp-servers/data-center/tools')
+    check('GET /api/mcp-servers/:id/tools 可用', toolsOnly.status === 200 && (toolsOnly.body?.tools ?? []).length > 0,
+      `status=${toolsOnly.status}`)
+    const unknownMcp = await request(s.baseUrl, '/api/mcp-servers/no-such/test', { method: 'POST', body: JSON.stringify({}) })
+    check('未知 MCP 服务器返回 404', unknownMcp.status === 404, `status=${unknownMcp.status}`)
+
     const events = await sendMessage(s.baseUrl, conversationId, '帮我查一下流场数据。')
     const types = events.map((event) => event.type)
     log(`  SSE：${types.join(' → ')}`)
     const toolStarted = events.find((event) => event.type === 'tool.started')
     check('MCP 工具被调用', toolStarted?.data?.tool === 'mcp__data-center__search_dataset', JSON.stringify(toolStarted?.data))
     check('MCP 工具执行成功', events.find((event) => event.type === 'tool.completed')?.data?.success === true, JSON.stringify(events.find((e) => e.type === 'tool.completed')?.data))
+    const mcpResult = events.find((event) => event.type === 'tool.completed')?.data
+    check('tool.completed 带结构化结果', mcpResult?.result !== undefined && mcpResult.result !== null,
+      JSON.stringify(mcpResult?.result).slice(0, 200))
+    check('结构化结果含数据集匹配', Array.isArray(mcpResult?.result?.matches), JSON.stringify(mcpResult?.result)?.slice(0, 200))
+    check('tool.completed 带文本结果', typeof mcpResult?.resultText === 'string' && mcpResult.resultText.length > 0,
+      JSON.stringify(mcpResult?.resultText)?.slice(0, 120))
     check('本轮有 assistant 文本', (events.filter((event) => event.type === 'message.completed').at(-1)?.data?.text ?? '').length > 0)
 
     // ---- 不同配置：不挂 MCP 的对话

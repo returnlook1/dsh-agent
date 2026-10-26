@@ -200,3 +200,65 @@ message.started / message.completed / tool.started / tool.completed / message.fa
 | 无中途取消 | 超时关闭运行时；历史保留、下次 resume | 运行时池 + 软取消 |
 | 单机 JSON 存储 | 无多机共享、无事务 | 数据量上来后换数据库（接口已隔离在 `store/`） |
 | 运行时上限 | `MAX_RUNTIMES` 默认 8，超出回收最久空闲 | 按业务并发调整，或做跨进程池 |
+
+---
+
+## 11. 代码评审后的加固（P0/P1）
+
+按外部评审逐项修复，均有回归测试。
+
+### 11.1 并发冷启动竞态（P0-2）
+
+`RuntimePool.acquire()` 原来是"查不到就 await 创建，成功后才登记"，两个请求同时冷启动会
+各起一个进程、抢同一个 `DSH_HOME`。现在增加 `pending: Map<configKey, Promise<entry>>`，
+同配置的初始化合并到同一个 Promise。回归测试：10 个对话同时首启 → 只有 1 个运行时。
+
+### 11.2 会话恢复失败被吞（P0-4）
+
+原实现在 `resumeSession()` 失败时只记 warning 就继续 `prompt()`，后果是用户以为上文还在，
+其实模型拿到了空上下文。现在：
+
+- 恢复发生在任何运行状态登记之前；
+- `hasHistory=true` 且恢复失败 → 直接 `409 SESSION_RESTORE_FAILED`，**不**发 prompt；
+- 首次消息（`hasHistory=false`）不调用 resume，由 `prompt` 创建会话。
+
+### 11.3 MCP 凭据明文落盘（P0-3）
+
+旧实现的 `McpConfig.resolve()` 把 `${ENV}` 展开成真实值，再序列化进 `mcp.cordis.yml`。
+现在：
+
+- `command/args/url` 只展开 `${REPO_ROOT}`；出现 `${ENV}` 直接报错（强制把凭据放 env/headers）；
+- `env/headers` 保留为表达式，渲染成 `!!js process.env.X` / 模板字符串，在 DSH 子进程启动时求值；
+- 只把**被引用的**环境变量按白名单注入子进程；缺失即报错（fail closed）；
+- 回归测试断言生成的 YAML 里不含真实 token，只有 `!!js` 引用。
+
+### 11.4 能力变更没有进入配置指纹（P1-5）
+
+`configKey` 原来只含 skills/mcpServers/provider/model/systemPrompt。改了 `SKILL.md` 内容、
+MCP 连接配置或 profile 模板后，名字没变 → key 不变 → 复用旧运行时。现在增加
+`capabilityRevision`（技能内容哈希 + MCP 书写态定义 + profile 模板，sha256 前 12 位）并纳入
+`configKey`；快照 DTO 也带该字段，便于排查。
+
+### 11.5 复用既有 DSH 配置（P0-1）
+
+新增 `DshSource`：只读导入源 profile 的 Skills 目录、MCP 定义、Provider 插件。
+导入时的关键处理：
+
+- CLI 拒绝 dump `desktop` 这类保留名 → 复制 manifest 成临时导入 profile（`node_modules` 用
+  junction 指回源 profile）再 `--dump-config`；
+- 源组合里的 `!!js` 用自定义 YAML tag 保留成 `{__jsExpr}`，渲染回 patch 时还原成 `!!js`；
+- provider 凭据只从服务环境或源 `.credentials.yaml` 的 `refs` 取值注入子进程，**不落盘**；
+- `GET /api/dsh-source` 输出导入项与凭据可用性（只报变量名）。
+
+实测（真实 `~/.dsh` + desktop）：导入到 `llm-pi-ai` / `dsh-providers-hub` / `dsh-opencode-go`，
+运行时正常启动并完成一轮对话；这些第三方 provider 是否注册出模型取决于其依赖的服务是否齐备，
+因此导入是"尽力而为 + 可诊断"，不阻断启动。
+
+### 11.6 新增的运维能力（P1）
+
+- `POST /api/mcp-servers/:id/test` / `GET .../tools`：stdio 与 streamable-http 的真实握手 +
+  `tools/list`（分页），返回协议版本、工具与参数 Schema、耗时与错误；
+- `tool.completed` 增加 `result`（文本是 JSON 时解析）与截断的 `resultText`，前端可据此做
+  地图动作等结构化交互；
+- `POST /api/conversations/:id/stop`：唯一运行中的对话才允许关闭运行时，否则 409 `RUNTIME_BUSY`；
+- `PATCH` / `DELETE /api/conversations/:id`：重命名与删除（运行中拒绝）。

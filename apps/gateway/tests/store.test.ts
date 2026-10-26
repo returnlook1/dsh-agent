@@ -32,6 +32,7 @@ function makeConversation(id: string, overrides: Partial<ConversationDto> = {}):
     config: {
       ...config,
       configKey: '0123456789abcdef',
+      capabilityRevision: 'test',
       projectId: 'p1',
       createdAt: 1,
       inheritedFromProject: true,

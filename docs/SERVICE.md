@@ -89,6 +89,11 @@ runtime/snapshots/<configKey>/
 | `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 Bearer |
 | `AGENT_SERVICE_MODEL_DISCOVERY` | `on` | `off` = 关闭向 DSH 询问模型清单（仅用缓存） |
 | `AGENT_SERVICE_MODEL_PROBE` | gateway 构建产物 | 模型探针插件入口（一般不用改） |
+| `DSH_SOURCE_HOME` | – | **既有 DSH home**（如 `C:\Users\me\.dsh`）；设置后启用"复用现有配置" |
+| `DSH_SOURCE_PROFILE` | `desktop` | 源 profile 名（CLI 拒绝 dump `desktop`，服务会复制成临时导入 profile 再 dump） |
+| `DSH_SOURCE_IMPORT_PROVIDERS` | `on` | 是否把源组合里的 provider 插件导入运行时 |
+| `DSH_SOURCE_IMPORT_MCP` | `on` | 是否把源组合里的 MCP 服务器定义导入能力清单 |
+| `MAX_RUNTIMES` | `8` | 运行时上限（超出先回收最久空闲） |
 | `CORS_ORIGINS` | – | 逗号分隔的允许来源；默认同源 |
 | `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
 | `LOG_LEVEL` | `info` | |
@@ -134,6 +139,23 @@ provider 由 Cordis 插件在运行时注册，模型目录由 adapter 提供（
 - 清单不可用且没有显式值 → `503 MODEL_UNAVAILABLE`；有显式值则放行（运行时会给更精确的错误）；
 - `GET /api/models?refresh=1` 强制重新发现（换 Provider / baseURL 后不用重启服务）。
 
+### 3.2c 复用既有 DSH 配置（`DSH_SOURCE_HOME`）
+
+设置 `DSH_SOURCE_HOME` 后，服务会**只读**导入你日常 DSH 的配置，不需要在服务里维护第二套：
+
+| 能力 | 导入方式 |
+| --- | --- |
+| Skills | 直接扫 `<home>/skills`、`<home>/agents/skills`（作为额外技能根） |
+| MCP | 把源 profile 的 manifest 复制成临时导入 profile（`<RUNTIME_DIR>/dsh-import/<hash>`，`node_modules` 用 junction 指回源 profile）后 `dsh --dump-config`，解析 `@deepseek-ai/dsh-mcp-client` 条目 |
+| Provider | 从同一份组合里挑出 provider 插件条目（`llm-*` / `providers-hub` / `*-go`，跳过与内置冲突的 `llm-deepseek*`），作为独立 patch 插进每个运行时快照 |
+
+- 导入的 provider 条目里若带 `!!js` 表达式，会**原样还原**成表达式（不求值、不落盘）；
+- provider 声明的凭据变量优先取服务进程环境，其次取源 DSH 的 `.credentials.yaml` 里的 `refs`；
+  两者都没有时只在 `/api/dsh-source` 里标为 `missing`，不阻断启动；
+- `GET /api/dsh-source` 返回来源、导入的 provider/MCP 列表、凭据可用性（**只报变量名**）；
+- 已验证：用真实 `~/.dsh`（desktop）导入后，运行时能正常启动并完成一轮对话；
+  导入的第三方 provider 是否注册出模型取决于它依赖的服务是否齐备（见 `docs/VERIFICATION.md` §6）。
+
 ### 3.3 技能目录
 
 ```
@@ -171,10 +193,12 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 
 | 关注点 | 规则 |
 | --- | --- |
-| 复用键 | `configKey` |
+| 复用键 | `configKey`（含 `capabilityRevision`：技能内容 / MCP 定义 / profile 模板变化都会换 key） |
+| 并发冷启动 | 同 key 的初始化合并到同一个 Promise（10 个会话同时首启只会拉起 1 个运行时） |
 | 承载 | 同一个运行时承载多个会话（每个对话一个 DSH session） |
 | 会话创建 | 首次 `prompt` 时由 DSH 自动创建（SDK 对未知 sessionId 会创建） |
-| 恢复 | 运行时被回收后重建（同 home），对已有 `sessionId` 先 `resumeSession()` 再 `prompt()` |
+| 恢复 | 运行时被回收后重建（同 home），对已有 `sessionId` 先 `resumeSession()`；**失败一律 409 `SESSION_RESTORE_FAILED`，绝不静默新建空白会话** |
+| 停止 | SDK 无单轮取消：`POST /conversations/:id/stop` 关闭承载它的运行时；同运行时上有其它对话在跑时返回 409 `RUNTIME_BUSY` |
 | 事件路由 | 一个订阅，按 `notification.params.sessionId` → `conversationId` 反查 |
 | 空闲回收 | 每 30s 扫描：`now - lastActiveAt > RUNTIME_IDLE_MS` 且无运行中对话 → `close()` |
 | 失败处理 | 传输错误 → 该运行时上所有运行中对话收到 `message.failed`，实例销毁（下次重建） |
@@ -187,7 +211,7 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 | 收到用户消息（本地已落库） | `message.started`（role=user） |
 | `session.event` `assistant/message` | `message.completed`（`text` = 文本块拼接；同 `message.id` 去重） |
 | `session.event` `tool/call` | `tool.started` |
-| `session.event` `tool/result` | `tool.completed`（`message.isError` → success=false） |
+| `session.event` `tool/result` | `tool.completed`（`message.isError` → success=false；文本是 JSON 时附带 `result`，并始终带截断的 `resultText`） |
 | `session.event` `turn/end{reason.kind:'error'}` | `message.failed`（code=`TURN_ERROR`） |
 | `session.status{status:'idle'}` | 本轮结束（SSE 关闭；若没有任何 assistant 文本则 `message.failed`） |
 | 传输关闭 / 超时 | `message.failed`（code=`RUNTIME_CLOSED` / `TIMEOUT`） |
@@ -197,19 +221,25 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 ## 7. HTTP API
 
 统一前缀 `/api`。错误：`{ error: { code, message, details? } }`，code 用
-`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | MODEL_UNKNOWN | MODEL_UNAVAILABLE | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
+`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | MODEL_UNKNOWN | MODEL_UNAVAILABLE | SESSION_RESTORE_FAILED | RUNTIME_BUSY | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | `{ ok, version, dshVersion, runtimes, uptimeSec }` |
 | GET | `/api/models` | **从 DSH 读取**的 provider / model 清单（`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
-| GET | `/api/mcp-servers` | 可用 MCP 服务器 |
+| GET | `/api/mcp-servers` | 可用 MCP 服务器（含 `source: config | dsh-profile`） |
+| POST | `/api/mcp-servers/:id/test` | MCP 连接测试（握手 + `tools/list`），body 可带 `timeoutMs` |
+| GET | `/api/mcp-servers/:id/tools` | MCP 工具清单（同样走一次探测） |
+| GET | `/api/dsh-source` | 既有 DSH 配置来源诊断（导入项 + 凭据可用性，只报变量名） |
 | GET | `/api/projects/:projectId/agent-config` | 项目默认配置（未保存返回默认值 + `saved:false`） |
 | PUT | `/api/projects/:projectId/agent-config` | 保存项目配置（body 为 patch） |
 | POST | `/api/conversations` | 创建对话（返回 conversationId / sessionId / config 快照） |
 | GET | `/api/conversations` | 历史列表（`?projectId=` 可选、`?limit=` 默认 50） |
 | GET | `/api/conversations/:id` | 对话详情 |
+| PATCH | `/api/conversations/:id` | 重命名（只改展示标题） |
+| DELETE | `/api/conversations/:id` | 删除对话（运行中 409） |
+| POST | `/api/conversations/:id/stop` | 停止当前轮次（关闭承载运行时；有其它对话在跑则 409 `RUNTIME_BUSY`） |
 | GET | `/api/conversations/:id/config` | 配置快照 |
 | PUT | `/api/conversations/:id/config` | 修改快照（**仅当对话还没有消息**，否则 409 `CONVERSATION_STARTED`） |
 | GET | `/api/conversations/:id/messages` | 历史消息 |
@@ -252,4 +282,9 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 - `store.test.ts`：原子写、损坏恢复、并发追加。
 - `events.test.ts`：真实 DSH 事件 payload → 5 个业务事件（含去重、错误分支）。
 - `api/*.test.ts`：注入式 HTTP 测试，覆盖上面的接口与错误码。
-- 不启动真实 DSH：真实链路由 `scripts/smoke-run.mjs` / `scripts/e2e-service.mjs` 覆盖。
+- `runtime/pool.test.ts`：**10 个同配置对话同时冷启动只拉起 1 个运行时**；恢复失败明确 409；
+  `stop` 的唯一运行场景与 `RUNTIME_BUSY` 拒绝。
+- `runtime/capabilityRevision.test.ts`：改 SKILL.md / MCP 定义 / profile 模板 → 版本与 configKey 变化。
+- `runtime/mcpOverlay.test.ts`：渲染出的 YAML **不含真实凭据**，只有 `!!js process.env.X` 引用。
+- `dsh/dshSource.test.ts`：provider/MCP 导入过滤、`${ENV}` 还原、凭据可用性、dump 失败降级。
+- 不启动真实 DSH：真实链路由 `scripts/check-runtime.mjs` / `scripts/e2e-service.mjs` 覆盖。

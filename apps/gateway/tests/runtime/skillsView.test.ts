@@ -57,6 +57,7 @@ function makeSnapshot(config: Partial<AgentConfig> = {}, overrides: Partial<Agen
   return {
     ...merged,
     configKey: computeConfigKey(merged),
+    capabilityRevision: 'test',
     projectId: 'project-1',
     createdAt: Date.now(),
     inheritedFromProject: true,

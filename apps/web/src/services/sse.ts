@@ -146,6 +146,10 @@ function readOptionalNumber(record: JsonRecord, key: string): number | undefined
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function hasOwn(record: JsonRecord, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
 /**
  * 把 JSON 载荷窄化为业务事件；非本协议的帧返回 null（忽略，不抛错）。
  * `event:` 名可能与 payload 不一致，以 payload 的 `type` 为准。
@@ -197,6 +201,12 @@ export function toServiceEvent(value: unknown): ServiceEvent | null {
         success,
         error: readOptionalString(value, 'error'),
         durationMs: readOptionalNumber(value, 'durationMs'),
+        // 未知 JSON 原样透传为 unknown（不在解析层扩散 any）；字段存在即保留，
+        // 包括合法的 `null`。只有 `resultText` 才要求是字符串。
+        ...(hasOwn(value, 'result') ? { result: value['result'] as unknown } : {}),
+        ...(readOptionalString(value, 'resultText') === undefined
+          ? {}
+          : { resultText: readOptionalString(value, 'resultText') as string }),
       }
     }
     case 'message.failed': {

@@ -25,17 +25,19 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 
 ---
 
-## 2. 单元测试（153 用例）
+## 2. 单元测试（201 用例）
 
 | 范围 | 用例 | 覆盖点 |
 | --- | --- | --- |
 | `apps/gateway/tests/skills/catalog` | 6 | 目录 bundle / 单文件 / 非法 frontmatter / 重名优先级 |
 | `apps/gateway/tests/runtime/configKey` | 5 | 数组顺序无关、字段敏感、稳定 |
 | `apps/gateway/tests/runtime/skillsView` | 9 | 只复制选中的技能、未知技能报错、单文件技能 |
-| `apps/gateway/tests/runtime/mcpOverlay` | 8 | stdio / streamable-http 两种渲染、`${ENV}` 与 `${REPO_ROOT}` 解析、未知变量 fail closed |
+| `apps/gateway/tests/runtime/mcpOverlay` | 10 | `!!js` 引用渲染、**YAML 不含真实凭据**、`${REPO_ROOT}` 展开、缺变量 fail closed、探测目标 |
 | `apps/gateway/tests/store` | 10 | 原子写、损坏备份、并发追加、消息序号 |
 | `apps/gateway/tests/events` | 12 | DSH 事件 → 5 个业务事件、`assistant/message` 去重、`turn/end{error}`、工具配对 |
-| `apps/gateway/tests/runtime/pool` | 9 | 复用/上限/回收/resume/传输错误广播 |
+| `apps/gateway/tests/runtime/pool` | 14 | 复用/上限/回收/resume/传输错误广播；**10 并发冷启动只起 1 个运行时**；恢复失败 409；`stop` 与 `RUNTIME_BUSY` |
+| `apps/gateway/tests/runtime/capabilityRevision` | 5 | SKILL.md / MCP 定义 / profile 模板变化 → 版本与 configKey 变化 |
+| `apps/gateway/tests/dsh/dshSource` | 12 | provider/MCP 导入过滤、`${ENV}` 还原、凭据可用性、dump 失败降级 |
 | `apps/gateway/tests/api/service` | 25 | 全部接口与错误码（400/401/404/409/503） |
 | `apps/gateway/tests/models/*` | 24 | 探针输出解析、默认路由、`MODEL_UNKNOWN`/`MODEL_UNAVAILABLE`、缓存与降级 |
 | `apps/gateway/tests/api/models` | 7 | `GET /api/models`、不传模型落默认路由、未知 provider/model 400 |
@@ -124,7 +126,26 @@ runtimes: 1 个（skills=netcdf-analysis/gis-processing, mcp=data-center）
 
 ---
 
-## 6. 未验证项
+
+---
+
+## 6. 评审修复的验证证据
+
+| 修复 | 证据 |
+| --- | --- |
+| 并发冷启动 | 单测：10 个对话同时 `send()`，`pool.status()` 只有 1 个运行时、`conversationCount=10` |
+| 会话恢复失败 | 单测：`resumeSession` 抛错时 `send()` 抛 `SESSION_RESTORE_FAILED`，且 `prompts` 为空（没有偷偷新建会话） |
+| MCP 凭据 | 单测：生成的 `mcp.cordis.yml` 含 `!!js process.env.*`，不含 `super-secret` / `secret-token` |
+| 能力版本 | 单测：追加 SKILL.md 内容 / 改 MCP args / 改模板 → `capabilityRevision` 与 `configKey` 均变化 |
+| 复用既有 DSH 配置 | 真实 `~/.dsh` + `desktop` 实测：`GET /api/dsh-source` 导入 `llm-pi-ai` / `dsh-providers-hub` / `dsh-opencode-go`，`opencode` 账号凭据在 `.credentials.yaml` 中可解析；运行时正常启动并完成一轮对话（mock 模型）。生成快照的 `providers.cordis.yml` 只有变量名、无凭据值 |
+| MCP 连接测试 | e2e：`POST /api/mcp-servers/data-center/test` 成功，返回 `protocolVersion` 与 `search_dataset`；`GET .../tools` 同样可用；未知服务器 404 |
+| 结构化工具结果 | e2e：`tool.completed` 带 `result`（含 `matches` 数组）与 `resultText` |
+| 停止 / 重命名 / 删除 | e2e：空闲对话 `stop` 返回 `runtimeClosed:false`；`PATCH` 改名生效；`DELETE` 返回 204 且再查询 404 |
+
+> 导入的第三方 provider 是否在 `/api/models` 里出现，取决于它依赖的服务（credentials/settings 等）
+> 是否齐备；本次实测这些 bundle 未注册出额外模型，但也没有破坏运行时启动——服务把它当作
+> "尽力而为的导入"，并在 `/api/dsh-source` 里如实展示。
+## 7. 未验证项
 
 | 项目 | 原因 |
 | --- | --- |
@@ -136,7 +157,7 @@ runtimes: 1 个（skills=netcdf-analysis/gis-processing, mcp=data-center）
 
 ---
 
-## 7. 复现
+## 8. 复现
 
 ```powershell
 npm install --cache .npm-cache --no-audit --no-fund --ignore-scripts

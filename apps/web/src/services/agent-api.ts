@@ -17,17 +17,24 @@ import type {
   ConversationSummary,
   CreateConversationRequest,
   CreateConversationResponse,
+  McpProbeResponse,
   McpServerListResponse,
   McpServerSummaryDto,
+  McpToolInfo,
   MessageDto,
   MessageListResponse,
   ProjectAgentConfigDto,
   SkillCatalogResponse,
   SkillSummaryDto,
+  StopConversationResponse,
   ToolCallRecord,
 } from '@agent-studio/shared'
 
 import { uniqueStrings } from '../constants'
+import { formatDuration } from '../utils/format'
+
+/** 对 UI 层重新导出新增契约类型，调用方不必再直接依赖 shared 明细。 */
+export type { McpProbeResponse, StopConversationResponse } from '@agent-studio/shared'
 
 const API_BASE = '/api'
 
@@ -69,10 +76,41 @@ export function describeApiError(error: unknown): string {
   return '未知错误'
 }
 
+const TIMEOUT_PATTERN = /timeout|timed\s*out|etimedout|超时|逾时/i
+
+/**
+ * MCP 探测失败的原因文案（纯函数，便于单测）。
+ *
+ * 后端在 `ok=false` 时通过 `error` 返回原因；这里只做展示层的归类：
+ * 超时给出可读的长度提示，其余原样展示，缺失时也给出兜底说明。
+ */
+export function describeMcpProbeFailure(probe: McpProbeResponse): string {
+  const raw = (probe.error ?? '').trim()
+  const took = formatDuration(probe.durationMs)
+  if (TIMEOUT_PATTERN.test(raw)) {
+    const suffix = raw.length > 0 ? `：${raw}` : ''
+    return `探测超时（已等待 ${took || '较长时间'}），MCP 服务器未在限定时间内响应${suffix}`
+  }
+  if (raw.length > 0) return raw
+  return `MCP 探测失败（耗时 ${took || '未知'}），服务端未返回原因`
+}
+
+/** MCP 探测请求本身失败（HTTP / 网络 / 契约错误）时的文案。 */
+export function describeMcpProbeError(error: unknown): string {
+  if (error instanceof AgentApiError) {
+    if (error.code === 'ABORTED') return 'MCP 探测已取消'
+    if (TIMEOUT_PATTERN.test(`${error.code} ${error.message}`)) {
+      return `探测超时：${error.message}`
+    }
+    return error.message
+  }
+  return describeApiError(error)
+}
+
 /* ------------------------------------------------------------ HTTP 传输层 */
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
   accept?: string
@@ -191,6 +229,10 @@ function readOptionalNumber(record: JsonRecord, key: string): number | undefined
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function hasOwn(record: JsonRecord, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
 function readStringArray(record: JsonRecord, key: string): string[] | null {
   const value = record[key]
   if (!Array.isArray(value)) return null
@@ -258,6 +300,10 @@ export function parseSkillCatalog(value: unknown): SkillCatalogResponse {
   return { skills, roots }
 }
 
+function parseMcpSource(value: unknown): McpServerSummaryDto['source'] {
+  return value === 'dsh-profile' ? 'dsh-profile' : 'config'
+}
+
 function parseMcpServer(value: unknown): McpServerSummaryDto {
   const record = asRecord(value)
   if (record === null) throw contractError('MCP 服务器条目不是对象')
@@ -274,6 +320,7 @@ function parseMcpServer(value: unknown): McpServerSummaryDto {
     transport,
     enabled: record['enabled'] !== false,
     description: readOptionalString(record, 'description'),
+    source: parseMcpSource(record['source']),
   }
 }
 
@@ -282,9 +329,73 @@ export function parseMcpServerCatalog(value: unknown): McpServerListResponse {
   if (record === null) throw contractError('MCP 响应不是对象')
   const serversValue = record['servers']
   if (!Array.isArray(serversValue)) throw contractError('MCP 响应缺少 servers 数组')
+  const dshSource = readOptionalString(record, 'dshSource')
   return {
     servers: asUnknownArray(serversValue).map(parseMcpServer),
     configPath: readOptionalString(record, 'configPath') ?? '',
+    ...(dshSource === undefined ? {} : { dshSource }),
+  }
+}
+
+/* ---------------------------------------------------------- MCP 探测解析 */
+
+function parseMcpTool(value: unknown, index: number): McpToolInfo {
+  const record = asRecord(value)
+  if (record === null) throw contractError(`MCP 工具第 ${index + 1} 项不是对象`)
+  const name = readString(record, 'name')
+  if (name === null) throw contractError(`MCP 工具第 ${index + 1} 项缺少 name`)
+  return {
+    name,
+    description: readOptionalString(record, 'description'),
+    ...(hasOwn(record, 'inputSchema') ? { inputSchema: record['inputSchema'] } : {}),
+  }
+}
+
+/**
+ * 解析 `POST /api/mcp-servers/:id/test` 与 `GET /api/mcp-servers/:id/tools`
+ * 的统一响应。`tools` 允许为空数组（服务器可用但没有工具）。
+ */
+export function parseMcpProbeResponse(value: unknown): McpProbeResponse {
+  const record = asRecord(value)
+  if (record === null) throw contractError('MCP 探测响应不是对象')
+  const ok = record['ok']
+  const serverId = readString(record, 'serverId')
+  const transport = record['transport']
+  const durationMs = readNumber(record, 'durationMs')
+  if (typeof ok !== 'boolean') throw contractError('MCP 探测响应缺少 ok')
+  if (serverId === null) throw contractError('MCP 探测响应缺少 serverId')
+  if (transport !== 'stdio' && transport !== 'streamable-http') {
+    throw contractError('MCP 探测响应 transport 不是 stdio / streamable-http')
+  }
+  if (durationMs === null || durationMs < 0) throw contractError('MCP 探测响应缺少 durationMs')
+  const toolsValue = record['tools']
+  if (!Array.isArray(toolsValue)) throw contractError('MCP 探测响应缺少 tools 数组')
+  const tools = asUnknownArray(toolsValue).map((item, index) => parseMcpTool(item, index))
+  return {
+    ok,
+    serverId,
+    tools,
+    durationMs,
+    transport,
+    serverName: readOptionalString(record, 'serverName'),
+    protocolVersion: readOptionalString(record, 'protocolVersion'),
+    error: readOptionalString(record, 'error'),
+  }
+}
+
+/** 解析 `POST /api/conversations/:id/stop` 的响应。 */
+export function parseStopConversationResponse(value: unknown): StopConversationResponse {
+  const record = asRecord(value)
+  if (record === null) throw contractError('停止对话响应不是对象')
+  const ok = record['ok']
+  const runtimeClosed = record['runtimeClosed']
+  if (typeof ok !== 'boolean' || typeof runtimeClosed !== 'boolean') {
+    throw contractError('停止对话响应缺少 ok / runtimeClosed')
+  }
+  return {
+    ok,
+    runtimeClosed,
+    note: readOptionalString(record, 'note'),
   }
 }
 
@@ -331,6 +442,7 @@ function parseConfigSnapshot(record: JsonRecord, fallbackProjectId: string): Age
   return {
     ...parseAgentConfigFields(record),
     configKey: readOptionalString(record, 'configKey') ?? '',
+    capabilityRevision: readOptionalString(record, 'capabilityRevision') ?? '',
     projectId: readOptionalString(record, 'projectId') ?? fallbackProjectId,
     createdAt: readOptionalNumber(record, 'createdAt') ?? 0,
     inheritedFromProject: record['inheritedFromProject'] === true,
@@ -569,6 +681,27 @@ export async function getMcpServers(): Promise<McpServerListResponse> {
   return parseMcpServerCatalog(await requestJson('/mcp-servers'))
 }
 
+/**
+ * `POST /api/mcp-servers/:id/test`：真实拉起服务器并 `tools/list`。
+ *
+ * 服务端默认超时 20s，最坏可接近 25s；这里不设前端短超时，由调用方用
+ * loading 状态承接（同一个服务器的并发去重放在 config store 里）。
+ */
+export async function testMcpServer(serverId: string, timeoutMs?: number): Promise<McpProbeResponse> {
+  const path = `/mcp-servers/${encodeURIComponent(serverId)}/test`
+  const value = await requestJson(path, {
+    method: 'POST',
+    ...(timeoutMs === undefined ? {} : { body: { timeoutMs } }),
+  })
+  return parseMcpProbeResponse(value)
+}
+
+/** `GET /api/mcp-servers/:id/tools`：由服务端重新探测并返回工具清单。 */
+export async function getMcpServerTools(serverId: string): Promise<McpProbeResponse> {
+  const path = `/mcp-servers/${encodeURIComponent(serverId)}/tools`
+  return parseMcpProbeResponse(await requestJson(path))
+}
+
 export async function getProjectAgentConfig(projectId: string): Promise<ProjectAgentConfigDto> {
   const path = `/projects/${encodeURIComponent(projectId)}/agent-config`
   return parseProjectAgentConfig(await requestJson(path), projectId)
@@ -604,6 +737,28 @@ export async function listConversations(params: {
 
 export async function getConversation(conversationId: string): Promise<ConversationDto> {
   return parseConversationDto(await requestJson(`/conversations/${encodeURIComponent(conversationId)}`))
+}
+
+/** `PATCH /api/conversations/:id`：重命名（1..200 字）。 */
+export async function renameConversation(
+  conversationId: string,
+  title: string,
+): Promise<ConversationDto> {
+  const path = `/conversations/${encodeURIComponent(conversationId)}`
+  const value = await requestJson(path, { method: 'PATCH', body: { title } })
+  return parseConversationDto(value)
+}
+
+/** `DELETE /api/conversations/:id`：成功返回 204（无正文）。 */
+export async function deleteConversation(conversationId: string): Promise<void> {
+  const path = `/conversations/${encodeURIComponent(conversationId)}`
+  await requestJson(path, { method: 'DELETE' })
+}
+
+/** `POST /api/conversations/:id/stop`：停止当前轮（关闭承载运行时）。 */
+export async function stopConversation(conversationId: string): Promise<StopConversationResponse> {
+  const path = `/conversations/${encodeURIComponent(conversationId)}/stop`
+  return parseStopConversationResponse(await requestJson(path, { method: 'POST' }))
 }
 
 export async function getMessages(conversationId: string): Promise<MessageListResponse> {

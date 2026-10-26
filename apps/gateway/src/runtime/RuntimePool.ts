@@ -113,6 +113,13 @@ export interface RuntimePoolDeps {
 
 export class RuntimePool {
   private readonly entries = new Map<string, RuntimeEntry>()
+  /**
+   * 正在初始化中的运行时（configKey → promise）。
+   *
+   * 没有这张表时存在竞态：A 发现没有运行时 → 开始 await initialize；
+   * B 此时仍发现没有 → 也启动一个进程，两个实例抢同一个 home/配置目录。
+   */
+  private readonly pending = new Map<string, Promise<RuntimeEntry>>()
   private reaper: NodeJS.Timeout | undefined
   private serial = 0
   private readonly now: () => number
@@ -153,6 +160,10 @@ export class RuntimePool {
   async send(input: SendTurnInput): Promise<SendTurnResult> {
     const entry = await this.acquire(input.config)
     if (entry.running.has(input.conversationId)) throw conversationRunning()
+
+    // 恢复历史会话**先于**任何运行状态登记：失败时不会留下"半轮"，
+    // 也不会在用户以为上下文还在的情况下悄悄开一个空白会话（review P0-4）。
+    await this.ensureSession(entry, input)
 
     let resolved = false
     let timer: NodeJS.Timeout | undefined
@@ -207,23 +218,6 @@ export class RuntimePool {
     }, this.deps.config.turnTimeoutMs)
 
     try {
-      if (!entry.resumed.has(input.sessionId) && input.hasHistory) {
-        try {
-          await entry.client.resumeSession(input.sessionId)
-          this.deps.logger.info('resumed existing session', {
-            runtimeId: entry.runtimeId,
-            sessionId: input.sessionId,
-          })
-        } catch (error) {
-          // 没有持久化日志（首次消息）时 resume 会失败：prompt 会创建新会话。
-          this.deps.logger.warn('resumeSession failed; prompt will create the session', {
-            runtimeId: entry.runtimeId,
-            sessionId: input.sessionId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-      entry.resumed.add(input.sessionId)
       await entry.client.prompt(input.sessionId, [{ type: 'text', text: input.text }])
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -239,6 +233,66 @@ export class RuntimePool {
     return result
   }
 
+  /**
+   * 确保该会话在运行时里可用。
+   *
+   * - 首次消息（`hasHistory=false`）：直接 `prompt` 让 DSH 创建会话；
+   * - 已有历史：必须先 `resumeSession` 成功；失败一律 409 `SESSION_RESTORE_FAILED`，
+   *   **绝不**静默创建空白会话（否则用户会以为模型还记得上文）。
+   */
+  private async ensureSession(entry: RuntimeEntry, input: SendTurnInput): Promise<void> {
+    if (entry.resumed.has(input.sessionId)) return
+    if (!input.hasHistory) {
+      entry.resumed.add(input.sessionId)
+      return
+    }
+    try {
+      await entry.client.resumeSession(input.sessionId)
+      entry.resumed.add(input.sessionId)
+      this.deps.logger.info('resumed existing session', {
+        runtimeId: entry.runtimeId,
+        sessionId: input.sessionId,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.deps.logger.error('session restore failed', {
+        runtimeId: entry.runtimeId,
+        conversationId: input.conversationId,
+        sessionId: input.sessionId,
+        error: message,
+      })
+      throw new ApiError(
+        'SESSION_RESTORE_FAILED',
+        `历史会话恢复失败：${message}`,
+        { conversationId: input.conversationId, sessionId: input.sessionId },
+        409,
+      )
+    }
+  }
+
+  /**
+   * 停止某个对话正在执行的一轮。
+   *
+   * SDK 没有单轮取消接口，停止 = 关闭承载它的运行时。为了不误伤同一运行时上的其它
+   * 对话，只有当它是该运行时上唯一运行中的对话时才允许；否则 409 `RUNTIME_BUSY`。
+   */
+  async stop(conversationId: string): Promise<{ runtimeClosed: boolean; note?: string }> {
+    const entry = [...this.entries.values()].find((candidate) => candidate.running.has(conversationId))
+    if (entry === undefined) {
+      return { runtimeClosed: false, note: '该对话当前没有正在执行的轮次' }
+    }
+    const others = [...entry.running].filter((id) => id !== conversationId)
+    if (others.length > 0) {
+      throw new ApiError(
+        'RUNTIME_BUSY',
+        `该运行时上还有 ${others.length} 个对话正在运行，停止会中断它们；请等待或先停止其它对话`,
+        { runtimeId: entry.runtimeId, running: others.length },
+        409,
+      )
+    }
+    await this.closeEntry(entry, 'client stop')
+    return { runtimeClosed: true, note: '已关闭承载该对话的运行时（SDK 无单轮取消接口）' }
+  }
   /** 手动触发一次空闲回收（测试与排障用；生产由 30s 定时器调用）。 */
   async reapNow(): Promise<void> {
     const now = this.now()
@@ -272,6 +326,21 @@ export class RuntimePool {
     const existing = this.entries.get(config.configKey)
     if (existing !== undefined && !existing.closing) return existing
 
+    // 同配置的冷启动合并到同一个 promise（review P0-2）。
+    const inflight = this.pending.get(config.configKey)
+    if (inflight !== undefined) return await inflight
+
+    const task = this.createEntry(config)
+    this.pending.set(config.configKey, task)
+    try {
+      return await task
+    } finally {
+      this.pending.delete(config.configKey)
+    }
+  }
+
+  /** 真正创建运行时（只由 acquire 调用；并发由 pending 去重）。 */
+  private async createEntry(config: AgentConfigSnapshot): Promise<RuntimeEntry> {
     if (this.entries.size >= this.deps.config.maxRuntimes) {
       const victim = [...this.entries.values()]
         .filter((entry) => entry.running.size === 0)
@@ -295,7 +364,7 @@ export class RuntimePool {
       profile: this.deps.config.dshProfile,
       dshHome: materialized.homeDir,
       processCwd: materialized.workspaceDir,
-      patches: [materialized.agentPatchPath, materialized.mcpPatchPath],
+      patches: [materialized.agentPatchPath, materialized.mcpPatchPath, materialized.providerPatchPath],
       env: materialized.env,
     })
 
