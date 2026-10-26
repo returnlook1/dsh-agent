@@ -1291,3 +1291,17 @@ pre,
   flex-direction: column;
   gap: var(--as-space-2);
 }
+
+/* 模型路由（只读，由 DSH 决定） */
+.model-route-readonly {
+  display: flex;
+  align-items: center;
+  gap: var(--as-space-2);
+  padding: 6px 0;
+}
+
+.model-route-readonly__model {
+  font-family: var(--as-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--as-text-2, rgba(0, 0, 0, 0.65));
+}

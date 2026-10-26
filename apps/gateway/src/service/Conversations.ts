@@ -21,7 +21,7 @@ import type {
 } from '@agent-studio/shared'
 import { agentConfigSchema, mergeAgentConfig, unique } from '@agent-studio/shared'
 import type { Logger } from '../logger.js'
-import { conversationRunning, conversationStarted, modelUnavailable, modelUnknown, notFound } from '../http/errors.js'
+import { conversationRunning, conversationStarted, modelUnavailable, notFound } from '../http/errors.js'
 import type { ModelCatalogService } from '../models/ModelCatalogService.js'
 import type { CapabilityRevision } from '../runtime/CapabilityRevision.js'
 import type { McpConfig } from '../mcp/McpConfig.js'
@@ -88,14 +88,17 @@ export class ConversationService {
   }
 
   /**
-   * 补全并校验 provider/model：
-   * 空值 → DSH 清单里的默认路由；显式值 → 必须在清单里（400 MODEL_UNKNOWN）。
+   * 写入 DSH 决定的模型路由。
+   *
+   * **供应商与模型由 DSH 统一管理**：这里不读取、也不接受前端传来的 provider/model，
+   * 只用 `agent-default-model`（优先）或清单第一项覆盖快照里的值。
    */
   private resolveRoute(config: AgentConfig): AgentConfig {
-    return this.deps.models.resolveConfig(config, {
-      unknown: (message, details) => modelUnknown(message, details),
+    // 严格按 DSH 的默认模型：不可用时报错，绝不悄悄换模型。
+    const route = this.deps.models.defaultRouteStrict({
       unavailable: (message) => modelUnavailable(message),
     })
+    return { ...config, provider: route.provider, model: route.model }
   }
 
   private snapshot(config: AgentConfig, projectId: string, inheritedFromProject: boolean): AgentConfigSnapshot {
@@ -104,6 +107,7 @@ export class ConversationService {
       ...config,
       configKey: computeConfigKey({ ...config, capabilityRevision }),
       capabilityRevision,
+      routeSource: this.deps.models.lastDefaultSource(),
       projectId,
       createdAt: this.now(),
       inheritedFromProject,
@@ -151,11 +155,10 @@ export class ConversationService {
   create(input: CreateConversationRequest): ConversationDto {
     const inherit = input.inheritProjectConfig ?? true
     const project = inherit ? this.deps.store.getProject(input.projectId)?.config : undefined
+    // 供应商/模型不来自请求：始终由 DSH 决定（见 resolveRoute）。
     const override: AgentConfigPatch = stripUndefined({
       skills: input.skills,
       mcpServers: input.mcpServers,
-      provider: input.provider,
-      model: input.model,
       systemPrompt: input.systemPrompt,
     })
     const merged = this.validate(this.resolveRoute(mergeAgentConfig(project, override, inherit)))
@@ -194,8 +197,6 @@ export class ConversationService {
         agentConfigSchema.parse({
           skills: patch.skills ?? current.skills,
           mcpServers: patch.mcpServers ?? current.mcpServers,
-          provider: patch.provider ?? current.provider,
-          model: patch.model ?? current.model,
           systemPrompt: patch.systemPrompt ?? current.systemPrompt,
         }),
       ),
@@ -206,6 +207,7 @@ export class ConversationService {
       ...nextConfig,
       configKey: computeConfigKey({ ...nextConfig, capabilityRevision }),
       capabilityRevision,
+      routeSource: this.deps.models.lastDefaultSource(),
       projectId: current.projectId,
       createdAt: current.createdAt,
       inheritedFromProject: current.inheritedFromProject,

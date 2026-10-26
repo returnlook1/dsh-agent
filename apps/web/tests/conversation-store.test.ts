@@ -29,6 +29,7 @@ function conversationDto(overrides: Partial<ConversationDto> = {}): Conversation
       systemPrompt: '',
       configKey: 'key-1',
       capabilityRevision: 'rev-1',
+    routeSource: 'catalog-first',
       projectId: 'default',
       createdAt: 1,
       inheritedFromProject: false,

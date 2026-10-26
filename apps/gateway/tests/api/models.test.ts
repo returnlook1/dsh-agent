@@ -52,48 +52,28 @@ describe('创建对话时的模型路由', () => {
     expect(body.config.model).toBe('deepseek-flash')
   })
 
-  it('显式指定清单内的模型 → 原样进入快照', async () => {
+  it('客户端指定 provider/model 会被忽略（由 DSH 统一管理）', async () => {
     const response = await h.app.inject({
       method: 'POST',
       url: '/api/conversations',
-      payload: { projectId: 'p-explicit', model: 'deepseek-v4-pro' },
+      payload: { projectId: 'p-explicit', provider: 'openai', model: 'gpt-4o' },
     })
     expect(response.statusCode).toBe(201)
-    expect((response.json() as { config: { model: string } }).config.model).toBe('deepseek-v4-pro')
+    const config = (response.json() as { config: { provider: string; model: string; routeSource: string } }).config
+    expect(config.provider).toBe('deepseek-official')
+    expect(config.model).toBe('deepseek-flash')
+    expect(config.routeSource).toBe('catalog-first')
   })
 
-  it('未知模型 → 400 MODEL_UNKNOWN（带可用模型）', async () => {
-    const response = await h.app.inject({
-      method: 'POST',
-      url: '/api/conversations',
-      payload: { projectId: 'p-bad', model: 'gpt-4o' },
-    })
-    expect(response.statusCode).toBe(400)
-    const body = response.json() as { error: { code: string; details?: { availableModels?: string[] } } }
-    expect(body.error.code).toBe('MODEL_UNKNOWN')
-    expect(body.error.details?.availableModels).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
-  })
-
-  it('未知 provider → 400 MODEL_UNKNOWN（带可用 provider）', async () => {
-    const response = await h.app.inject({
-      method: 'POST',
-      url: '/api/conversations',
-      payload: { projectId: 'p-bad2', provider: 'openai', model: 'deepseek-flash' },
-    })
-    expect(response.statusCode).toBe(400)
-    const body = response.json() as { error: { code: string; details?: { available?: unknown[] } } }
-    expect(body.error.code).toBe('MODEL_UNKNOWN')
-    expect((body.error.details?.available ?? []).length).toBeGreaterThan(0)
-  })
-
-  it('项目配置保存未知模型同样被拒', async () => {
+  it('项目配置同样不接受 provider/model（写不进去）', async () => {
     const response = await h.app.inject({
       method: 'PUT',
       url: '/api/projects/p-bad3/agent-config',
-      payload: { model: 'not-a-model' },
+      payload: { skills: [], model: 'not-a-model' },
     })
-    expect(response.statusCode).toBe(400)
-    expect((response.json() as { error: { code: string } }).error.code).toBe('MODEL_UNKNOWN')
+    expect(response.statusCode).toBe(200)
+    const body = response.json() as { model: string }
+    expect(body.model).toBe('deepseek-flash')
   })
 })
 
@@ -116,13 +96,13 @@ describe('模型清单不可用时的降级', () => {
       expect(created.statusCode).toBe(503)
       expect((created.json() as { error: { code: string } }).error.code).toBe('MODEL_UNAVAILABLE')
 
-      // 显式给路由时放行（由运行时给出更精确的错误）
+      // 客户端也不再能靠"显式给路由"绕过：模型路由完全由 DSH 决定
       const explicit = await bare.app.inject({
         method: 'POST',
         url: '/api/conversations',
         payload: { projectId: 'p2', provider: 'deepseek-official', model: 'deepseek-flash' },
       })
-      expect(explicit.statusCode).toBe(201)
+      expect(explicit.statusCode).toBe(503)
     } finally {
       await bare.close()
     }

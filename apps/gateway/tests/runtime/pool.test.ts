@@ -154,6 +154,7 @@ function createPoolFixture(
       ...base,
       configKey: computeConfigKey(base),
       capabilityRevision: 'test',
+      routeSource: 'catalog-first',
       projectId: 'p1',
       createdAt: 1_000,
       inheritedFromProject: true,

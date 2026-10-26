@@ -51,6 +51,7 @@ function probeSnapshot(): AgentConfigSnapshot {
     systemPrompt: '',
     configKey: PROBE_CONFIG_KEY,
     capabilityRevision: 'model-probe',
+    routeSource: 'catalog-first',
     projectId: '_probe',
     createdAt: Date.now(),
     inheritedFromProject: false,

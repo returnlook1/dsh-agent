@@ -37,8 +37,7 @@ export const createConversationRequestSchema = z.object({
   /** 对话级能力覆盖；与项目配置取并集。 */
   skills: z.array(z.string().min(1)).optional(),
   mcpServers: z.array(z.string().min(1)).optional(),
-  provider: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
+  /** 供应商/模型由 DSH 统一管理，创建对话时不可指定。 */
   systemPrompt: z.string().max(20_000).optional(),
   /** 是否继承项目配置，默认 true。 */
   inheritProjectConfig: z.boolean().optional(),
@@ -57,8 +56,6 @@ export interface CreateConversationResponse {
 export const updateConversationConfigRequestSchema = z.object({
   skills: z.array(z.string().min(1)).optional(),
   mcpServers: z.array(z.string().min(1)).optional(),
-  provider: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
   systemPrompt: z.string().max(20_000).optional(),
 }) satisfies z.ZodType<AgentConfigPatch>
 export type UpdateConversationConfigRequest = z.infer<typeof updateConversationConfigRequestSchema>

@@ -97,7 +97,8 @@ export function createServices(
     ...(dshSource.enabled && config.dshSourceImportProviders
       ? {
           providerImport: () => {
-            const entries = dshSource.providerEntries()
+            // 支撑插件（credentials/commands）+ 源组合里的 provider 插件
+            const entries = [...dshSource.providerSupportEntries(), ...dshSource.providerEntries()]
             if (entries.length === 0) return undefined
             return {
               entries,
@@ -115,6 +116,8 @@ export function createServices(
   const models =
     options.models ??
     new ModelCatalogService({
+      // 供应商与模型由 DSH 统一管理：默认路由取 DSH 的 agent-default-model
+      preferredRoute: () => dshSource.defaultRoute(),
       discovery:
         config.modelDiscovery && options.clientFactory === undefined
           ? new ModelDiscovery({

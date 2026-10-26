@@ -439,8 +439,10 @@ export function parseProjectAgentConfig(value: unknown, fallbackProjectId: strin
 }
 
 function parseConfigSnapshot(record: JsonRecord, fallbackProjectId: string): AgentConfigSnapshot {
+  const routeSourceRaw = readString(record, 'routeSource')
   return {
     ...parseAgentConfigFields(record),
+    routeSource: routeSourceRaw === 'dsh-default-model' ? 'dsh-default-model' : 'catalog-first',
     configKey: readOptionalString(record, 'configKey') ?? '',
     capabilityRevision: readOptionalString(record, 'capabilityRevision') ?? '',
     projectId: readOptionalString(record, 'projectId') ?? fallbackProjectId,
@@ -651,6 +653,16 @@ export function parseModelCatalog(value: unknown): ModelCatalogResponse {
     })
   }
   const defaultRecord = asRecord(record['default']) ?? {}
+  const defaultSourceRaw = record['defaultSource']
+  const preferredRaw = asRecord(record['preferredUnavailable'])
+  const preferredUnavailable =
+    preferredRaw === null
+      ? undefined
+      : {
+          provider: readString(preferredRaw, 'provider') ?? '',
+          model: readString(preferredRaw, 'model') ?? '',
+          reason: readString(preferredRaw, 'reason') ?? '',
+        }
   const sourceRaw = record['source']
   const source: ModelCatalogSource =
     sourceRaw === 'live' || sourceRaw === 'cache' || sourceRaw === 'unavailable' ? sourceRaw : 'unavailable'
@@ -661,6 +673,8 @@ export function parseModelCatalog(value: unknown): ModelCatalogResponse {
       provider: readString(defaultRecord, 'provider') ?? '',
       model: readString(defaultRecord, 'model') ?? '',
     },
+    defaultSource: defaultSourceRaw === 'dsh-default-model' ? 'dsh-default-model' : 'catalog-first',
+    ...(preferredUnavailable === undefined ? {} : { preferredUnavailable }),
     discoveredAt: readOptionalNumber(record, 'discoveredAt') ?? 0,
     source,
     ...(catalogError === undefined ? {} : { error: catalogError }),

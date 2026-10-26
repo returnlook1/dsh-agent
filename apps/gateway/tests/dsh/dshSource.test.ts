@@ -56,6 +56,11 @@ const DUMP = `
       Authorization: !!js \`Bearer \${process.env.GEO_TOKEN ?? ''}\`
 - id: web-app
   name: '@deepseek-ai/dsh-web-app'
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: dsh-opencode-go
+    model: deepseek-v4.1-flash
 `
 
 function createSource(
@@ -146,6 +151,31 @@ describe('DshSource', () => {
 
     const values = source.providerEnvValues(['TEST_OPENCODE_ACCOUNT'])
     expect(values.TEST_OPENCODE_ACCOUNT).toBe('secret-value')
+  })
+
+  it('读取 DSH 配置的默认模型路由', () => {
+    const source = createSource()
+    expect(source.defaultRoute()).toEqual({ provider: 'dsh-opencode-go', model: 'deepseek-v4.1-flash' })
+  })
+
+  it('有凭据文件时为第三方 provider 补充 credentials/commands 插件', () => {
+    const home = makeTempDir('dsh-support-')
+    fs.writeFileSync(path.join(home, '.credentials.yaml'), 'version: 1\nrefs: {}\n', 'utf8')
+    const source = createSource({ home })
+    const entries = source.providerSupportEntries()
+    expect(entries.map((entry) => entry.name)).toEqual([
+      '@deepseek-ai/dsh-credentials',
+      '@deepseek-ai/dsh-credentials-local',
+      '@deepseek-ai/dsh-commands',
+    ])
+    const local = entries.find((entry) => entry.name === '@deepseek-ai/dsh-credentials-local')
+    expect((local?.config as { path: string }).path).toContain('.credentials.yaml')
+  })
+
+  it('没有凭据文件时不引入凭据服务', () => {
+    const home = makeTempDir('dsh-nocred-')
+    const source = createSource({ home })
+    expect(source.providerSupportEntries()).toEqual([])
   })
 
   it('describe 汇总来源信息（不泄露凭据值）', () => {

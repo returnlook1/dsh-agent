@@ -262,3 +262,30 @@ MCP 连接配置或 profile 模板后，名字没变 → key 不变 → 复用�
   地图动作等结构化交互；
 - `POST /api/conversations/:id/stop`：唯一运行中的对话才允许关闭运行时，否则 409 `RUNTIME_BUSY`；
 - `PATCH` / `DELETE /api/conversations/:id`：重命名与删除（运行中拒绝）。
+---
+
+## 12. 供应商与模型的所有权归 DSH
+
+最终定位：**DSH 统一管理供应商和模型，Agent Service 只负责项目、Skill、MCP、会话与对话接口。**
+
+据此做的收口：
+
+| 项 | 之前 | 现在 |
+| --- | --- | --- |
+| 项目配置 | 含可写 `provider` / `model` | 只含 skills / mcpServers / systemPrompt |
+| 创建对话 | 可指定 provider / model | 不接受（请求里带了也被忽略） |
+| 默认模型 | 服务用"清单第一项" | 取 DSH 的 `agent-default-model`；没有才用清单第一项 |
+| 前端 | Provider / Model 两个下拉 | 只读展示"DSH 当前路由 + 来源"，可选刷新 |
+| 默认路由不可用 | 静默回落到别的模型 | `503 MODEL_UNAVAILABLE` + 可操作提示（装 provider 插件） |
+
+为什么严格失败而不是回落：如果 DSH 配的是 A 模型、服务悄悄用 B，前端和业务会以为在按 DSH 的
+配置运行，这比直接报错更危险。运行时缺 provider 插件时，正确做法是把插件装进服务的 profile
+（`dsh plugin --profile agent-service add <包名>`），或改 DSH 的默认模型。
+
+`routeSource` 会记进快照（`dsh-default-model` / `catalog-first`），`/api/models` 也返回
+`defaultSource` 与 `preferredUnavailable`（配了但不可用时的原因），便于排查。
+
+实测边界：把 `DSH_SOURCE_HOME` 指向真实 `~/.dsh#desktop` 时，服务能读到 DSH 的默认
+`dsh-opencode-go / deepseek-v4.1-flash`；但该第三方 provider 的插件在服务自己的 profile 里
+没有可靠解析（源 profile 是 pnpm 布局 + junction），因此运行时会如实报告不可用并拒绝创建对话——
+这正是"所有权在 DSH、可用性由部署决定"的预期行为。

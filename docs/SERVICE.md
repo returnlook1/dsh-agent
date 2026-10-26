@@ -120,6 +120,22 @@ runtime/snapshots/<configKey>/
 
 `${ENV}` 占位在**生成运行时配置时**从服务进程环境解析；解析不到就报错，不写空值。
 
+### 3.2a 供应商与模型的所有权：DSH
+
+**Agent Service 不拥有供应商与模型**，只做三件事：读、用、报告。
+
+- 默认路由来自 DSH 的 `agent-default-model`（源组合里的 `provider` / `model`）；
+- 运行时清单来自 DSH 的 `ctx.llm.listProviders()` / `listModels()`；
+- 项目配置与对话创建**不接受** `provider` / `model`（请求里带了也会被忽略）；
+- `/api/models` 是只读信息；快照里记录实际使用的路由与来源（`routeSource`），用于排查。
+
+严格语义：**DSH 配置的默认模型必须在当前运行时可用**，否则创建对话返回 `503 MODEL_UNAVAILABLE`，
+不会悄悄改用别的模型。运行时里没有该 provider 时，按提示把它装进服务 profile：
+
+```powershell
+dsh plugin --profile agent-service add <provider-package>
+```
+
 ### 3.2b 模型清单来自 DSH
 
 provider / model **不写死在服务里**。`0.2.1-rc.3` 的 SDK 协议没有"列模型"的方法，
@@ -133,10 +149,9 @@ provider 由 Cordis 插件在运行时注册，模型目录由 adapter 提供（
 
 规则：
 
-- **默认路由** = 清单里第一个有模型的 provider 的首个模型；
-- 配置里 `provider`/`model` 为空 → 用默认路由补全；
-- 显式值不在清单里 → `400 MODEL_UNKNOWN`（附可用清单）；
-- 清单不可用且没有显式值 → `503 MODEL_UNAVAILABLE`；有显式值则放行（运行时会给更精确的错误）；
+- **默认路由** = DSH 的 `agent-default-model`；DSH 没配置时用清单第一项；
+- 该默认路由在运行时不可用 → `503 MODEL_UNAVAILABLE`（**不降级**，并说明怎么装插件）；
+- 清单整体不可用 → `503 MODEL_UNAVAILABLE`；
 - `GET /api/models?refresh=1` 强制重新发现（换 Provider / baseURL 后不用重启服务）。
 
 ### 3.2c 复用既有 DSH 配置（`DSH_SOURCE_HOME`）
@@ -226,7 +241,7 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | `{ ok, version, dshVersion, runtimes, uptimeSec }` |
-| GET | `/api/models` | **从 DSH 读取**的 provider / model 清单（`?refresh=1` 重新探测） |
+| GET | `/api/models` | **从 DSH 读取**的 provider / model 清单与默认路由（只读；`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
 | GET | `/api/mcp-servers` | 可用 MCP 服务器（含 `source: config | dsh-profile`） |
 | POST | `/api/mcp-servers/:id/test` | MCP 连接测试（握手 + `tools/list`），body 可带 `timeoutMs` |

@@ -25,6 +25,11 @@ export type ModelDiscoveryLike = Pick<ModelDiscovery, 'discover'>
 
 export interface ModelCatalogServiceDeps {
   discovery: ModelDiscoveryLike | undefined
+  /**
+   * DSH 配置的默认路由（`agent-default-model`）。供应商与模型由 DSH 统一管理，
+   * 因此默认路由优先取它；取不到才回落到清单第一项。
+   */
+  preferredRoute?: () => { provider: string; model: string } | undefined
   logger: Logger
   /** 磁盘缓存路径（`data/models.json`）。 */
   cachePath: string
@@ -57,6 +62,7 @@ export class ModelCatalogService {
         this.current = {
           providers: raw.providers.map(normaliseProvider),
           default: raw.default ?? defaultRouteOf(raw.providers),
+          defaultSource: raw.defaultSource ?? 'catalog-first',
           discoveredAt: typeof raw.discoveredAt === 'number' ? raw.discoveredAt : 0,
           source: 'cache',
         }
@@ -78,6 +84,46 @@ export class ModelCatalogService {
   /** 是否有可用的 provider/model 路由。 */
   hasRoute(): boolean {
     return this.current !== undefined && hasUsableRoute(this.current)
+  }
+
+  /**
+   * 严格解析"运行时实际必须用的路由"。
+   *
+   * 语义：**模型由 DSH 决定**。
+   * - DSH 配置了 `agent-default-model` → 它必须在当前运行时清单里，否则 **不降级**，
+   *   直接报错（避免服务自作主张换模型，让前端/业务以为用的是 DSH 配置的那个）；
+   * - DSH 没有配置默认模型 → 用清单第一项（这仍然是 DSH 报告的可用集合）。
+   */
+  defaultRouteStrict(errors: { unavailable: (message: string) => Error }): ResolvedRoute {
+    const catalog = this.current
+    if (catalog === undefined || !hasUsableRoute(catalog)) {
+      throw errors.unavailable(
+        `DSH 没有提供可用的 provider/model${catalog?.error === undefined ? '' : `（${catalog.error}）`}`,
+      )
+    }
+    const preferred = this.deps.preferredRoute?.()
+    if (preferred !== undefined && preferred.provider !== '' && preferred.model !== '') {
+      const provider = catalog.providers.find((item) => item.id === preferred.provider)
+      const available = provider?.models.some((model) => model.id === preferred.model) === true
+      if (!available) {
+        const reason =
+          catalog.preferredUnavailable?.reason ??
+          (provider === undefined
+            ? `运行时里没有注册 provider ${preferred.provider}`
+            : `provider ${preferred.provider} 下没有模型 ${preferred.model}`)
+        throw errors.unavailable(
+          `DSH 配置的默认模型 ${preferred.provider} / ${preferred.model} 在当前运行时不可用：${reason}。` +
+            '请把对应的 provider 插件安装到 agent-service profile（dsh plugin --profile agent-service add <包名>），' +
+            '或在 DSH 中改用运行时可用的默认模型。',
+        )
+      }
+      return { provider: preferred.provider, model: preferred.model }
+    }
+    return { ...catalog.default }
+  }
+  /** 最近一次默认路由的来源（写进快照，便于排查"为什么用了这个模型"）。 */
+  lastDefaultSource(): ModelCatalogResponse['defaultSource'] {
+    return this.current?.defaultSource ?? 'catalog-first'
   }
 
   /** 默认路由；清单不可用时抛错（上层转 503）。 */
@@ -133,6 +179,10 @@ export class ModelCatalogService {
       this.current = {
         providers: previous?.providers ?? [],
         default: previous?.default ?? { provider: '', model: '' },
+        defaultSource: previous?.defaultSource ?? 'catalog-first',
+        ...(previous?.preferredUnavailable === undefined
+          ? {}
+          : { preferredUnavailable: previous.preferredUnavailable }),
         discoveredAt: previous?.discoveredAt ?? 0,
         source: previous === undefined ? 'unavailable' : 'cache',
         error: '模型发现已禁用（AGENT_SERVICE_MODEL_DISCOVERY=off）',
@@ -143,9 +193,14 @@ export class ModelCatalogService {
     try {
       const result: DiscoveryResult = await this.deps.discovery.discover()
       const providers = result.providers.map(normaliseProvider)
+      const resolved = this.resolveDefault(providers)
       const catalog: ModelCatalogResponse = {
         providers,
-        default: defaultRouteOf(providers),
+        default: resolved.route,
+        defaultSource: resolved.source,
+        ...(resolved.preferredUnavailable === undefined
+          ? {}
+          : { preferredUnavailable: resolved.preferredUnavailable }),
         discoveredAt: result.probedAt,
         source: hasUsableRoute({ providers }) ? 'live' : 'cache',
       }
@@ -162,11 +217,50 @@ export class ModelCatalogService {
       this.current = {
         providers: previous?.providers ?? [],
         default: previous?.default ?? { provider: '', model: '' },
+        defaultSource: previous?.defaultSource ?? 'catalog-first',
+        ...(previous?.preferredUnavailable === undefined
+          ? {}
+          : { preferredUnavailable: previous.preferredUnavailable }),
         discoveredAt: previous?.discoveredAt ?? 0,
         source: previous === undefined ? 'unavailable' : 'cache',
         error: reason,
       }
       return this.current
+    }
+  }
+
+  /**
+   * 决定默认路由：
+   * 1. DSH 配置了 `agent-default-model` 且该路由在清单里 → 用它（`dsh-default-model`）；
+   * 2. 否则用清单第一项（`catalog-first`）；若 DSH 配置了但不可用，附上原因。
+   */
+  private resolveDefault(providers: readonly ProviderOption[]): {
+    route: ResolvedRoute
+    source: ModelCatalogResponse['defaultSource']
+    preferredUnavailable?: { provider: string; model: string; reason: string }
+  } {
+    const preferred = this.deps.preferredRoute?.()
+    const fallback = defaultRouteOf(providers)
+    if (preferred === undefined || preferred.provider === '' || preferred.model === '') {
+      return { route: fallback, source: 'catalog-first' }
+    }
+    const entry = providers.find((provider) => provider.id === preferred.provider)
+    if (entry !== undefined && entry.models.some((model) => model.id === preferred.model)) {
+      return { route: preferred, source: 'dsh-default-model' }
+    }
+    const reason =
+      entry === undefined
+        ? `运行时里没有注册 provider ${preferred.provider}`
+        : `provider ${preferred.provider} 下没有模型 ${preferred.model}`
+    this.deps.logger.warn('DSH default route unavailable; falling back to catalog first', {
+      provider: preferred.provider,
+      model: preferred.model,
+      reason,
+    })
+    return {
+      route: fallback,
+      source: 'catalog-first',
+      preferredUnavailable: { provider: preferred.provider, model: preferred.model, reason },
     }
   }
 

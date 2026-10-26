@@ -374,6 +374,60 @@ export class DshSource {
       .map((status) => status.name)
   }
 
+  /**
+   * DSH 配置的默认模型路由（`agent-default-model` 条目）。
+   *
+   * 这是"供应商与模型由 DSH 统一管理"的落点：服务不再保存/选择模型，
+   * 而是读取 DSH 组合里配置的默认 provider/model。
+   * @returns 未配置或读取失败时 undefined
+   */
+  defaultRoute(): { provider: string; model: string } | undefined {
+    if (!this.enabled) return undefined
+    let entries: ImportedEntry[]
+    try {
+      entries = this.dumpComposition()
+    } catch {
+      return undefined
+    }
+    for (const entry of entries) {
+      const name = typeof entry.name === 'string' ? entry.name : ''
+      if (entry.id !== 'agent-default-model' && name !== '@deepseek-ai/dsh-agent-default-model') continue
+      const config = asRecord(entry.config)
+      const provider = typeof config?.provider === 'string' ? config.provider : undefined
+      const model = typeof config?.model === 'string' ? config.model : undefined
+      if (provider !== undefined && model !== undefined && provider !== '' && model !== '') {
+        return { provider, model }
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * 让导入的第三方 provider 能真正激活所需的支撑插件（credentials / commands）。
+   *
+   * `dsh-providers-hub` 声明 `inject = ['credentials','commands','llm']`，`dsh-opencode-go`
+   * 也需要凭据服务；sdk-minimal 里都没有，所以按需补：
+   * - `@deepseek-ai/dsh-credentials`（服务）
+   * - `@deepseek-ai/dsh-credentials-local`（后端，指向源 DSH 的 `.credentials.yaml`）
+   * - `@deepseek-ai/dsh-commands`（命令服务）
+   *
+   * 只有源 home 里确实存在凭据文件时才启用，避免无谓地引入写权限。
+   */
+  providerSupportEntries(): Array<{ id: string; name: string; config?: Record<string, unknown> }> {
+    if (!this.enabled || !this.options.importProviders) return []
+    const credentialsPath = this.credentialsPath()
+    if (!fs.existsSync(credentialsPath)) return []
+    return [
+      { id: 'credentials', name: '@deepseek-ai/dsh-credentials' },
+      {
+        id: 'credentials-local',
+        name: '@deepseek-ai/dsh-credentials-local',
+        config: { path: credentialsPath.replaceAll('\\', '/'), watch: false },
+      },
+      { id: 'commands', name: '@deepseek-ai/dsh-commands' },
+    ]
+  }
+
   /** 诊断信息（`GET /api/dsh-source`）。 */
   describe(): {
     enabled: boolean
@@ -388,6 +442,10 @@ export class DshSource {
     credentials: CredentialStatus[]
     /** 源 profile 的 node_modules（provider 插件解析处）。 */
     nodeModules?: string
+    /** DSH 配置的默认模型路由（服务只读采用）。 */
+    defaultRoute?: { provider: string; model: string }
+    /** 为第三方 provider 补的支撑插件。 */
+    supportEntries: string[]
     error?: string
   } {
     if (!this.enabled) {
@@ -399,6 +457,7 @@ export class DshSource {
         providers: [],
         mcpServers: [],
         credentials: [],
+        supportEntries: [],
       }
     }
     const skillRoots = this.skillRoots().map((root) => root.path)
@@ -417,6 +476,8 @@ export class DshSource {
         mcpServers,
         credentials: this.credentialStatus(providers),
         ...(nodeModules === undefined ? {} : { nodeModules }),
+        supportEntries: this.providerSupportEntries().map((entry) => entry.name),
+        ...(this.defaultRoute() === undefined ? {} : { defaultRoute: this.defaultRoute() as { provider: string; model: string } }),
       }
     } catch (error) {
       return {
@@ -429,6 +490,7 @@ export class DshSource {
         providers: [],
         mcpServers: [],
         credentials: [],
+        supportEntries: [],
         error: error instanceof Error ? error.message : String(error),
       }
     }

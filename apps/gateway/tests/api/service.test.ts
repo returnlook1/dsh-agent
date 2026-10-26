@@ -203,11 +203,12 @@ describe('API：项目配置', () => {
     const put = await h.app.inject({
       method: 'PUT',
       url: '/api/projects/ocean-project/agent-config',
+      // model 由 DSH 统一管理：这里传了也会被忽略，保存的是 DSH 的默认路由
       payload: { skills: ['netcdf-analysis'], model: 'deepseek-v4-pro' },
     })
     expect(put.statusCode).toBe(200)
     const saved = put.json() as Record<string, unknown>
-    expect(saved).toMatchObject({ projectId: 'ocean-project', saved: true, model: 'deepseek-v4-pro' })
+    expect(saved).toMatchObject({ projectId: 'ocean-project', saved: true, model: 'deepseek-flash' })
     expect(saved.updatedAt).toEqual(expect.any(Number))
 
     const get = await h.app.inject({ method: 'GET', url: '/api/projects/ocean-project/agent-config' })

@@ -250,6 +250,9 @@ async function phaseA() {
     check('默认路由由清单给出',
       (models.body?.default?.provider ?? '') !== '' && (models.body?.default?.model ?? '') !== '',
       JSON.stringify(models.body?.default))
+    check('默认路由标注来源（DSH 默认模型 / 清单第一项）',
+      models.body?.defaultSource === 'dsh-default-model' || models.body?.defaultSource === 'catalog-first',
+      String(models.body?.defaultSource))
 
     const mcp = await request(s.baseUrl, '/api/mcp-servers')
     check('GET /api/mcp-servers 200', mcp.status === 200)
@@ -266,7 +269,7 @@ async function phaseA() {
     check('未保存时返回默认配置且 saved=false', before.status === 200 && before.body?.saved === false, JSON.stringify(before.body))
     const saved = await request(s.baseUrl, `/api/projects/${projectId}/agent-config`, {
       method: 'PUT',
-      body: JSON.stringify({ skills: ['netcdf-analysis'], mcpServers: [], model: 'deepseek-flash' }),
+      body: JSON.stringify({ skills: ['netcdf-analysis'], mcpServers: [], model: 'ignored-by-server' }),
     })
     check('PUT 项目配置成功', saved.status === 200 && saved.body?.saved === true, JSON.stringify(saved.body))
     const after = await request(s.baseUrl, `/api/projects/${projectId}/agent-config`)
@@ -283,13 +286,16 @@ async function phaseA() {
       body: JSON.stringify({ projectId, mcpServers: ['no-such-server'] }),
     })
     check('未知 MCP 返回 400 MCP_UNKNOWN', badMcp.status === 400 && badMcp.body?.error?.code === 'MCP_UNKNOWN', JSON.stringify(badMcp.body))
+    // 供应商/模型由 DSH 统一管理：客户端传什么都会被忽略
     const badModel = await request(s.baseUrl, '/api/conversations', {
       method: 'POST',
-      body: JSON.stringify({ projectId, model: 'no-such-model' }),
+      body: JSON.stringify({ projectId, model: 'no-such-model', provider: 'no-such-provider' }),
     })
-    check('未知模型返回 400 MODEL_UNKNOWN',
-      badModel.status === 400 && badModel.body?.error?.code === 'MODEL_UNKNOWN',
-      `status=${badModel.status} ${JSON.stringify(badModel.body)}`)
+    check('客户端指定 provider/model 被忽略（仍用 DSH 默认路由）',
+      badModel.status === 201 &&
+        badModel.body?.config?.provider === models.body?.default?.provider &&
+        badModel.body?.config?.model === models.body?.default?.model,
+      `status=${badModel.status} route=${JSON.stringify(badModel.body?.config?.provider)}/${JSON.stringify(badModel.body?.config?.model)}`)
 
     // ---- 创建对话（继承项目配置）
     const created = await request(s.baseUrl, '/api/conversations', {
@@ -302,9 +308,11 @@ async function phaseA() {
     check('返回 conversationId + sessionId', typeof conversationId === 'string' && typeof sessionId === 'string')
     const snapshot = created.body?.config
     check('快照继承项目 skills', (snapshot?.skills ?? []).includes('netcdf-analysis'), JSON.stringify(snapshot?.skills))
-    check('快照的 provider/model 来自 DSH 清单',
+    check('快照的 provider/model 来自 DSH',
       snapshot?.provider === models.body?.default?.provider && snapshot?.model === models.body?.default?.model,
       JSON.stringify({ provider: snapshot?.provider, model: snapshot?.model }))
+    check('快照记录路由来源', snapshot?.routeSource === models.body?.defaultSource,
+      JSON.stringify({ routeSource: snapshot?.routeSource, defaultSource: models.body?.defaultSource }))
     check('快照带 configKey', typeof snapshot?.configKey === 'string' && snapshot.configKey.length >= 8, String(snapshot?.configKey))
     check('快照记录继承来源', snapshot?.inheritedFromProject === true)
 

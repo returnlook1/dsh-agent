@@ -35,10 +35,21 @@ export type ModelCatalogSource = 'live' | 'cache' | 'unavailable'
 
 export interface ModelCatalogResponse {
   providers: ProviderOption[]
-  /** 服务选定的默认路由：第一个有模型的 provider 的首个模型。 */
+  /**
+   * 默认路由。优先级：DSH 配置的 `agent-default-model` → 清单里第一个有模型的 provider。
+   * 前端只展示，不可修改（供应商与模型由 DSH 统一管理）。
+   */
   default: {
     provider: string
     model: string
+  }
+  /** 默认路由来自哪里。 */
+  defaultSource: 'dsh-default-model' | 'catalog-first'
+  /** DSH 配置了默认路由、但当前运行时清单里没有它时的说明（排障用）。 */
+  preferredUnavailable?: {
+    provider: string
+    model: string
+    reason: string
   }
   /** 清单生成时间。 */
   discoveredAt: number

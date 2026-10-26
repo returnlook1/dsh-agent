@@ -15,17 +15,17 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
 | 类型检查（4 个包） | `npm run typecheck` | ✅ 0 错误 |
-| 单元测试 | `npm test` | ✅ 15 文件 / **153 用例** |
+| 单元测试 | `npm test` | ✅ 19 文件 / **209 用例** |
 | 运行时检查（真实 DSH） | `npm run check:runtime` | ✅ **12 项断言** / 3 个场景 |
-| 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **55 项断言** / 2 个阶段 |
-| 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 135 kB，CSS gzip 79 kB） |
+| 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **72 项断言** / 2 个阶段 |
+| 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 149 kB，CSS gzip 79 kB） |
 | 手工演示 | `npm run demo` | ✅ 选技能 → 发消息 → 工具调用 → 回答（见 §5） |
 
 一次性全跑：`npm run verify`。
 
 ---
 
-## 2. 单元测试（201 用例）
+## 2. 单元测试（209 用例）
 
 | 范围 | 用例 | 覆盖点 |
 | --- | --- | --- |
@@ -141,6 +141,7 @@ runtimes: 1 个（skills=netcdf-analysis/gis-processing, mcp=data-center）
 | MCP 连接测试 | e2e：`POST /api/mcp-servers/data-center/test` 成功，返回 `protocolVersion` 与 `search_dataset`；`GET .../tools` 同样可用；未知服务器 404 |
 | 结构化工具结果 | e2e：`tool.completed` 带 `result`（含 `matches` 数组）与 `resultText` |
 | 停止 / 重命名 / 删除 | e2e：空闲对话 `stop` 返回 `runtimeClosed:false`；`PATCH` 改名生效；`DELETE` 返回 204 且再查询 404 |
+| 供应商/模型归 DSH | 单测：DSH 默认路由可用时采用；不可用时报错且提示"装进 agent-service profile"；无默认时用清单第一项。e2e：客户端传 `provider/model` 被忽略、快照 `routeSource` 与清单 `defaultSource` 一致 |
 
 > 导入的第三方 provider 是否在 `/api/models` 里出现，取决于它依赖的服务（credentials/settings 等）
 > 是否齐备；本次实测这些 bundle 未注册出额外模型，但也没有破坏运行时启动——服务把它当作

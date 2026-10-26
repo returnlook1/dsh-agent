@@ -130,14 +130,13 @@ function goHomeNow(): void {
 
 async function createNow(): Promise<void> {
   const projectId = config.projectId.trim()
-  const provider = config.provider.trim()
-  const model = config.model.trim()
   if (projectId.length === 0) {
     ui.notifyError('请先填写项目 ID')
     return
   }
-  if (provider.length === 0 || model.length === 0) {
-    ui.notifyError('Provider 与 Model 不能为空')
+  // 供应商与模型由 DSH 统一管理：创建对话时不再传 provider/model。
+  if (!config.hasUsableModel) {
+    ui.notifyError('DSH 没有报告可用的模型，无法新建对话')
     return
   }
 
@@ -145,8 +144,6 @@ async function createNow(): Promise<void> {
     projectId,
     skills: [...config.selectedSkills],
     mcpServers: [...config.selectedMcpServers],
-    provider,
-    model,
     systemPrompt: config.systemPrompt,
     // 左侧表单已经是完整选择；不继承项目默认，避免"取消勾选的技能被并集加回"。
     inheritProjectConfig: false,

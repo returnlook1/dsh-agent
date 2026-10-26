@@ -203,3 +203,88 @@ describe('ModelCatalogService 日志', () => {
     expect(warn).toHaveBeenCalled()
   })
 })
+
+describe('默认路由由 DSH 决定', () => {
+  function serviceWithPreferred(
+    preferred: { provider: string; model: string } | undefined,
+    providers: ProviderOption[] = PROVIDERS,
+  ): ModelCatalogService {
+    const root = makeTempDir('models-preferred-')
+    return new ModelCatalogService({
+      discovery: { discover: async () => ({ providers, probedAt: Date.now() }) },
+      preferredRoute: () => preferred,
+      logger: silentLogger,
+      cachePath: path.join(root, 'models.json'),
+    })
+  }
+
+  it('DSH 的 agent-default-model 在清单里 → 用它（defaultSource=dsh-default-model）', async () => {
+    const models = serviceWithPreferred({ provider: 'p-main', model: 'm-2' })
+    const catalog = await models.get()
+    expect(catalog.default).toEqual({ provider: 'p-main', model: 'm-2' })
+    expect(catalog.defaultSource).toBe('dsh-default-model')
+    expect(models.lastDefaultSource()).toBe('dsh-default-model')
+    expect(models.defaultRoute()).toEqual({ provider: 'p-main', model: 'm-2' })
+  })
+
+  it('DSH 默认路由不在清单里 → 回落第一项并说明原因', async () => {
+    const models = serviceWithPreferred({ provider: 'dsh-opencode-go', model: 'deepseek-v4.1-flash' })
+    const catalog = await models.get()
+    expect(catalog.defaultSource).toBe('catalog-first')
+    expect(catalog.default).toEqual({ provider: 'p-main', model: 'm-1' })
+    expect(catalog.preferredUnavailable).toMatchObject({
+      provider: 'dsh-opencode-go',
+      model: 'deepseek-v4.1-flash',
+    })
+  })
+
+  it('没有 DSH 默认路由 → 清单第一项', async () => {
+    const models = serviceWithPreferred(undefined)
+    const catalog = await models.get()
+    expect(catalog.defaultSource).toBe('catalog-first')
+  })
+})
+describe('defaultRouteStrict（DSH 拥有模型决策权）', () => {
+  const errors = () => ({
+    unavailable: (message: string) => Object.assign(new Error(message), { code: 'MODEL_UNAVAILABLE' }),
+  })
+
+  function serviceWithPreferred(preferred: { provider: string; model: string } | undefined): ModelCatalogService {
+    const root = makeTempDir('models-strict-')
+    return new ModelCatalogService({
+      discovery: { discover: async () => ({ providers: PROVIDERS, probedAt: Date.now() }) },
+      preferredRoute: () => preferred,
+      logger: silentLogger,
+      cachePath: path.join(root, 'models.json'),
+    })
+  }
+
+  it('DSH 默认路由可用 → 用它', async () => {
+    const models = serviceWithPreferred({ provider: 'p-main', model: 'm-2' })
+    await models.get()
+    expect(models.defaultRouteStrict(errors())).toEqual({ provider: 'p-main', model: 'm-2' })
+  })
+
+  it('DSH 默认路由不可用 → 报错而不是悄悄换模型', async () => {
+    const models = serviceWithPreferred({ provider: 'dsh-opencode-go', model: 'deepseek-v4.1-flash' })
+    await models.get()
+    expect(() => models.defaultRouteStrict(errors())).toThrowError(/当前运行时不可用/)
+    expect(() => models.defaultRouteStrict(errors())).toThrowError(/agent-service profile/)
+  })
+
+  it('DSH 没有配置默认模型 → 用清单第一项', async () => {
+    const models = serviceWithPreferred(undefined)
+    await models.get()
+    expect(models.defaultRouteStrict(errors())).toEqual({ provider: 'p-main', model: 'm-1' })
+  })
+
+  it('清单不可用 → MODEL_UNAVAILABLE', async () => {
+    const models = new ModelCatalogService({
+      discovery: undefined,
+      logger: silentLogger,
+      cachePath: path.join(makeTempDir('models-strict-empty-'), 'models.json'),
+    })
+    await models.get()
+    expect(() => models.defaultRouteStrict(errors())).toThrowError(/DSH 没有提供可用的 provider/)
+  })
+})

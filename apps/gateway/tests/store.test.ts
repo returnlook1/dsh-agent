@@ -33,6 +33,7 @@ function makeConversation(id: string, overrides: Partial<ConversationDto> = {}):
       ...config,
       configKey: '0123456789abcdef',
       capabilityRevision: 'test',
+      routeSource: 'catalog-first',
       projectId: 'p1',
       createdAt: 1,
       inheritedFromProject: true,
