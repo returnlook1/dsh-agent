@@ -43,6 +43,12 @@ export interface GatewayConfig {
   templateDir: string
   provider: ProviderConfig
   mockLlm: string | undefined
+  /** 是否向 DSH 询问模型清单（`AGENT_SERVICE_MODEL_DISCOVERY=off` 时关闭）。 */
+  modelDiscovery: boolean
+  /** 模型清单磁盘缓存（`<DATA_DIR>/models.json`）。 */
+  modelsCachePath: string
+  /** 探针插件入口（默认 gateway 构建产物；测试可覆盖）。 */
+  modelProbePlugin: string
   runtimeIdleMs: number
   turnTimeoutMs: number
   maxRuntimes: number
@@ -136,6 +142,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, repoRoot: strin
       ...(baseUrl === undefined ? {} : { baseUrl }),
     },
     mockLlm,
+    modelDiscovery: (envString(env, 'AGENT_SERVICE_MODEL_DISCOVERY', 'on') as string).toLowerCase() !== 'off',
+    modelsCachePath: path.join(dataDir, 'models.json'),
+    modelProbePlugin: path.resolve(
+      envString(
+        env,
+        'AGENT_SERVICE_MODEL_PROBE',
+        path.join(SOURCE_DIR, 'runtime', 'model-probe-plugin.js'),
+      ) as string,
+    ),
     runtimeIdleMs: envNumber(env, 'RUNTIME_IDLE_MS', 300_000),
     turnTimeoutMs: envNumber(env, 'TURN_TIMEOUT_MS', 600_000),
     maxRuntimes: envNumber(env, 'MAX_RUNTIMES', 8),
@@ -168,6 +183,8 @@ export function describeConfig(config: GatewayConfig): Record<string, unknown> {
     internalToken: config.internalToken === undefined ? '[absent]' : '[redacted]',
     corsOrigins: config.corsOrigins,
     mockLlm: config.mockLlm !== undefined,
+    modelDiscovery: config.modelDiscovery,
+    modelsCachePath: config.modelsCachePath,
     provider: {
       apiKey: config.provider.apiKey === undefined ? '[absent]' : '[redacted]',
       baseUrl: config.provider.baseUrl ?? '[default]',

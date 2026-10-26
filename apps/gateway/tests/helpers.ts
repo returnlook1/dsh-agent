@@ -8,7 +8,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import type { HarnessNotification } from '@deepseek-ai/dsh-sdk-client'
-import type { SkillSummaryDto } from '@agent-studio/shared'
+import type { ProviderOption, SkillSummaryDto } from '@agent-studio/shared'
+import { ModelCatalogService } from '../src/models/ModelCatalogService.js'
 import { REPO_ROOT, loadConfig, type GatewayConfig } from '../src/config.js'
 import { silentLogger } from '../src/logger.js'
 import { createServices } from '../src/server.js'
@@ -103,6 +104,40 @@ export function writeTemplate(dir: string): void {
     ].join('\n'),
     'utf8',
   )
+}
+
+/* ------------------------------------------------------------------ 模型清单夹具 */
+
+/**
+ * 测试默认模型清单：**故意与 DSH 内建目录一致**，但测试完全靠注入，
+ * 不启动 DSH、不依赖真实 provider。
+ */
+export const DEFAULT_TEST_PROVIDERS: ProviderOption[] = [
+  {
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', contextWindow: 1_048_576 },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', description: '更强推理' },
+    ],
+  },
+]
+
+/** 用假发现构造一个已经就绪的模型清单服务（单测不 spawn 任何进程）。 */
+export function createSeededModels(options: {
+  root: string
+  providers?: ProviderOption[]
+  now?: () => number
+}): ModelCatalogService {
+  const providers = options.providers ?? DEFAULT_TEST_PROVIDERS
+  return new ModelCatalogService({
+    discovery: {
+      discover: async () => ({ providers, probedAt: (options.now ?? Date.now)() }),
+    },
+    logger: silentLogger,
+    cachePath: path.join(options.root, 'data', 'models.json'),
+    now: options.now,
+  })
 }
 
 /* ------------------------------------------------------------------ 假运行时 */
@@ -288,6 +323,8 @@ export interface HarnessOptions {
   internalToken?: string
   /** 不写模板（用于"模板缺失"用例）。 */
   skipTemplate?: boolean
+  /** 覆盖测试用模型清单（默认只有 deepseek-official 两个模型）。 */
+  providers?: ProviderOption[]
 }
 
 export interface TestHarness {
@@ -327,9 +364,13 @@ export async function createHarness(options: HarnessOptions = {}): Promise<TestH
   })
 
   const handle = createFakeClientFactory()
+  const models = createSeededModels({ root, ...(options.providers === undefined ? {} : { providers: options.providers }) })
   const ctx = createServices(config, silentLogger, {
     clientFactory: options.clientFactory ?? handle.factory,
+    models,
   })
+  // 假发现是同步完成的：ensure 让清单在 app.ready() 前就绪。
+  await ctx.models.ensure()
   const app = await buildApp(ctx)
   await app.ready()
 

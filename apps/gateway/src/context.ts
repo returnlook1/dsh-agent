@@ -4,6 +4,7 @@
 import type { GatewayConfig } from './config.js'
 import type { Logger } from './logger.js'
 import type { McpConfig } from './mcp/McpConfig.js'
+import type { ModelCatalogService } from './models/ModelCatalogService.js'
 import type { RuntimePool } from './runtime/RuntimePool.js'
 import type { SseHub } from './runtime/SseHub.js'
 import type { ConversationService } from './service/Conversations.js'
@@ -20,6 +21,8 @@ export interface AppContext {
   catalog: SkillCatalog
   skills: SkillSource
   mcp: McpConfig
+  /** 模型清单（从 DSH 发现，带缓存）。 */
+  models: ModelCatalogService
   conversations: ConversationService
   pool: RuntimePool
   hub: SseHub

@@ -85,7 +85,28 @@ npm start
 否则返回 `409 CONVERSATION_STARTED`。要换能力就新开一个对话——已有会话不会因为配置变更
 而"中途换脑子"。
 
-## 3. Skills 与 MCP 是怎么生效的
+## 3. 模型从哪来
+
+provider / model **不在服务里写死**，也不在前端写死：
+
+- 服务启动时用一个**探针插件**在真实 DSH 子进程里问 `ctx.llm.listProviders()` / `listModels()`，
+  结果缓存在内存与 `data/models.json`；
+- Playground 的 Provider / Model 下拉框直接来自 `GET /api/models`（带"从 DSH 刷新"按钮）；
+- 配置里不选模型时，服务用清单里的默认路由（第一个有模型的 Provider 的首个模型）；
+- 选了清单里没有的模型 → `400 MODEL_UNKNOWN`（返回可用清单）；
+- 官方端点下模型目录来自 `/models` 列表，自建端点/mock 下来自 adapter 内建目录——
+  换 Provider、换 baseURL、升级 DSH 都不需要改代码。
+
+```
+GET /api/models
+{ "providers": [ { "id": "deepseek-official", "name": "DeepSeek",
+                   "models": [ { "id": "deepseek-flash", "name": "DeepSeek-V4.1-Flash" },
+                               { "id": "deepseek-v4-pro", "name": "DeepSeek-V4-Pro" } ] } ],
+  "default": { "provider": "deepseek-official", "model": "deepseek-flash" },
+  "source": "live" }
+```
+
+## 4. Skills 与 MCP 是怎么生效的
 
 `0.2.1-rc.3` 的 SDK 只有 `initialize(provider/model/maxTokens)`，**没有**按会话传
 `skills[]` / `mcpServers[]` 的入口；能力只能由 profile + Cordis 插件组合决定。所以：
@@ -121,11 +142,12 @@ MCP 服务器定义在 `config/mcp-servers.json`（支持 stdio 与 streamable-h
 进程环境取值，`${REPO_ROOT}` 指向仓库根）。仓库自带一个**离线可运行**的示例服务器
 `scripts/mcp-data-center-server.mjs`（`search_dataset` / `get_dataset_meta` / `get_flow_field`）。
 
-## 4. API
+## 5. API
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | 健康检查（含 DSH 版本） |
+| GET | `/api/models` | **从 DSH 读取**的 Provider / 模型清单（`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
 | GET | `/api/mcp-servers` | 可用 MCP 服务器 |
 | GET / PUT | `/api/projects/:projectId/agent-config` | 项目默认能力 |
@@ -164,7 +186,7 @@ curl -N -X POST "http://127.0.0.1:8787/api/conversations/conv-…/messages" \
 
 完整契约与错误码见 [docs/SERVICE.md](docs/SERVICE.md)。
 
-## 5. 配置
+## 6. 配置
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
@@ -179,11 +201,12 @@ curl -N -X POST "http://127.0.0.1:8787/api/conversations/conv-…/messages" \
 | `MOCK_LLM` | – | 非空 = 离线模式 |
 | `RUNTIME_IDLE_MS` | `300000` | 空闲运行时回收（回收后同配置下次自动 resume） |
 | `TURN_TIMEOUT_MS` | `600000` | 单轮上限 |
+| `AGENT_SERVICE_MODEL_DISCOVERY` | `on` | `off` = 关闭向 DSH 探测模型清单（只用缓存） |
 | `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 `Authorization: Bearer` |
 | `CORS_ORIGINS` | – | 允许的前端来源（逗号分隔），默认同源 |
 | `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
 
-## 6. 验证
+## 7. 验证
 
 ```powershell
 npm run typecheck        # 全部包类型检查
@@ -195,7 +218,7 @@ npm run verify           # 以上全部
 
 最近一次结果见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
-## 7. 目录结构
+## 8. 目录结构
 
 ```
 apps/gateway/            Agent Service（Fastify + JSON 存储 + 运行时池）
@@ -210,7 +233,7 @@ scripts/                 mock 模型、MCP 示例服务器、运行时检查、e
 docs/                    服务规格、决策记录、DSH 研究结论
 ```
 
-## 8. 已知边界
+## 9. 已知边界
 
 | 边界 | 说明 |
 | --- | --- |
@@ -221,7 +244,7 @@ docs/                    服务规格、决策记录、DSH 研究结论
 | 配置变更 | 已开始的对话不能换能力；新开对话生效 |
 | MCP | 支持 stdio 与 streamable-http；未做 OAuth/凭据托管 |
 
-## 9. 文档
+## 10. 文档
 
 | 文档 | 内容 |
 | --- | --- |

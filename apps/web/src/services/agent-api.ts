@@ -6,6 +6,10 @@
  * 业务代码扩散 `any`；调用方拿到的永远是共享契约里的类型。
  */
 import type {
+  ModelCatalogResponse,
+  ModelCatalogSource,
+  ModelOption,
+  ProviderOption,
   AgentConfigPatch,
   AgentConfigSnapshot,
   ConversationDto,
@@ -23,7 +27,7 @@ import type {
   ToolCallRecord,
 } from '@agent-studio/shared'
 
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../constants'
+import { uniqueStrings } from '../constants'
 
 const API_BASE = '/api'
 
@@ -296,8 +300,9 @@ function parseAgentConfigFields(record: JsonRecord): AgentConfigFields {
   return {
     skills: readStringArray(record, 'skills') ?? [],
     mcpServers: readStringArray(record, 'mcpServers') ?? [],
-    provider: readString(record, 'provider') ?? DEFAULT_PROVIDER,
-    model: readString(record, 'model') ?? DEFAULT_MODEL,
+    // provider/model 由服务端按 DSH 清单补全；缺省即空串（不做本地猜测）。
+    provider: readString(record, 'provider') ?? '',
+    model: readString(record, 'model') ?? '',
     systemPrompt: readOptionalString(record, 'systemPrompt') ?? '',
   }
 }
@@ -494,6 +499,66 @@ export function parseHealth(value: unknown): ServiceHealth {
 
 export async function getHealth(): Promise<ServiceHealth> {
   return parseHealth(await requestJson('/health'))
+}
+
+/** 解析 `GET /api/models`（provider/model 权威来源是 DSH）。 */
+export function parseModelCatalog(value: unknown): ModelCatalogResponse {
+  const record = asRecord(value)
+  if (record === null) throw contractError('模型清单响应不是对象')
+  const providersRaw = asUnknownArray(record['providers'])
+  if (providersRaw === null) throw contractError('模型清单响应缺少 providers 数组')
+  const providers: ProviderOption[] = []
+  for (const item of providersRaw) {
+    const providerRecord = asRecord(item)
+    if (providerRecord === null) continue
+    const id = readString(providerRecord, 'id')
+    if (id === null) continue
+    const models: ModelOption[] = []
+    for (const modelItem of asUnknownArray(providerRecord['models']) ?? []) {
+      const modelRecord = asRecord(modelItem)
+      if (modelRecord === null) continue
+      const modelId = readString(modelRecord, 'id')
+      if (modelId === null) continue
+      models.push({
+        id: modelId,
+        name: readOptionalString(modelRecord, 'name') ?? modelId,
+        ...(readOptionalString(modelRecord, 'description') === undefined
+          ? {}
+          : { description: readOptionalString(modelRecord, 'description') as string }),
+        ...(readOptionalNumber(modelRecord, 'contextWindow') === undefined
+          ? {}
+          : { contextWindow: readOptionalNumber(modelRecord, 'contextWindow') as number }),
+      })
+    }
+    const error = readOptionalString(providerRecord, 'error')
+    providers.push({
+      id,
+      name: readOptionalString(providerRecord, 'name') ?? id,
+      models,
+      ...(error === undefined ? {} : { error }),
+    })
+  }
+  const defaultRecord = asRecord(record['default']) ?? {}
+  const sourceRaw = record['source']
+  const source: ModelCatalogSource =
+    sourceRaw === 'live' || sourceRaw === 'cache' || sourceRaw === 'unavailable' ? sourceRaw : 'unavailable'
+  const catalogError = readOptionalString(record, 'error')
+  return {
+    providers,
+    default: {
+      provider: readString(defaultRecord, 'provider') ?? '',
+      model: readString(defaultRecord, 'model') ?? '',
+    },
+    discoveredAt: readOptionalNumber(record, 'discoveredAt') ?? 0,
+    source,
+    ...(catalogError === undefined ? {} : { error: catalogError }),
+  }
+}
+
+export async function getModels(refresh = false): Promise<ModelCatalogResponse> {
+  // 首次发现要起一次 DSH 探针（通常 1~2s），因此不设短超时。
+  const raw = await requestJson(`/api/models${refresh ? '?refresh=1' : ''}`)
+  return parseModelCatalog(raw)
 }
 
 export async function getSkills(): Promise<SkillCatalogResponse> {

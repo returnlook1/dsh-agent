@@ -15,6 +15,8 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'SKILL_UNKNOWN'
   | 'MCP_UNKNOWN'
+  | 'MODEL_UNKNOWN'
+  | 'MODEL_UNAVAILABLE'
   | 'RUNTIME_ERROR'
   | 'SERVICE_TOKEN_INVALID'
   | 'INTERNAL_ERROR'
@@ -27,6 +29,8 @@ export const ERROR_STATUS: Record<ApiErrorCode, number> = {
   CONFLICT: 409,
   SKILL_UNKNOWN: 400,
   MCP_UNKNOWN: 400,
+  MODEL_UNKNOWN: 400,
+  MODEL_UNAVAILABLE: 503,
   RUNTIME_ERROR: 502,
   SERVICE_TOKEN_INVALID: 401,
   INTERNAL_ERROR: 500,
@@ -62,6 +66,14 @@ export const conversationStarted = (): ApiError =>
 /** 对话正在运行（§8）。 */
 export const conversationRunning = (): ApiError =>
   new ApiError('CONVERSATION_RUNNING', '对话正在运行，不能同时发送新消息')
+
+/** 请求的 provider/model 不在 DSH 的可用清单里（§3.4）。 */
+export const modelUnknown = (message: string, details?: unknown): ApiError =>
+  new ApiError('MODEL_UNKNOWN', message, details)
+
+/** 无法从 DSH 获取模型清单，且请求没有指定具体路由。 */
+export const modelUnavailable = (message: string, details?: unknown): ApiError =>
+  new ApiError('MODEL_UNAVAILABLE', message, details)
 
 /** zod 校验入口：失败统一转成 `VALIDATION_ERROR`（保留 issues 便于前端定位）。 */
 export function parseInput<T>(schema: z.ZodType<T>, input: unknown, what = '请求'): T {

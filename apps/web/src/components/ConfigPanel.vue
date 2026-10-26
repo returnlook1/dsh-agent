@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Banner, Button, Card, Input, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
+import { Banner, Button, Card, Input, Select, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
 import { computed, ref } from 'vue'
 
 import McpSelect from '@/components/McpSelect.vue'
@@ -37,6 +37,13 @@ async function save(): Promise<void> {
   const ok = await config.saveProjectConfig()
   if (ok) ui.notifySuccess('项目默认配置已保存')
   else ui.notifyError(config.configError ?? '保存项目配置失败')
+}
+
+/** 重新向 DSH 询问模型清单（换 Provider / baseURL 后无需重启服务）。 */
+async function refreshModels(): Promise<void> {
+  await config.refreshModels()
+  if (config.modelsError === null) ui.notifySuccess('模型清单已刷新')
+  else ui.notifyError(config.modelsError)
 }
 </script>
 
@@ -148,13 +155,45 @@ async function save(): Promise<void> {
       </div>
 
       <div class="field">
-        <label class="field__label" for="provider">Provider</label>
-        <Input id="provider" v-model="config.provider" placeholder="deepseek-official" />
-      </div>
-
-      <div class="field">
-        <label class="field__label" for="model">Model</label>
-        <Input id="model" v-model="config.model" placeholder="deepseek-flash" />
+        <div class="field__head">
+          <span class="field__label">Provider / Model</span>
+          <Button size="small" theme="borderless" :loading="config.modelsLoading" @click="refreshModels">
+            从 DSH 刷新
+          </Button>
+        </div>
+        <div class="model-route">
+          <Select
+            class="model-route__provider"
+            :model-value="config.provider"
+            :loading="config.modelsLoading"
+            :disabled="config.providerOptions.length === 0"
+            filter
+            placeholder="选择 Provider"
+            @update:model-value="config.setProvider(String($event ?? ''))"
+          >
+            <Select.Option v-for="option in config.providerOptions" :key="option.id" :value="option.id">
+              {{ option.name }}（{{ option.id }}）
+            </Select.Option>
+          </Select>
+          <Select
+            class="model-route__model"
+            :model-value="config.model"
+            :loading="config.modelsLoading"
+            :disabled="config.modelOptions.length === 0"
+            filter
+            placeholder="选择模型"
+            @update:model-value="config.setModel(String($event ?? ''))"
+          >
+            <Select.Option v-for="option in config.modelOptions" :key="option.id" :value="option.id">
+              {{ option.name }}（{{ option.id }}）
+            </Select.Option>
+          </Select>
+        </div>
+        <p class="field__hint">{{ config.modelSummary }}</p>
+        <p v-if="config.modelsError" class="field__hint field__hint--danger">{{ config.modelsError }}</p>
+        <p v-if="!config.hasUsableModel" class="field__hint field__hint--danger">
+          DSH 没有报告可用的 provider/model，请检查 Provider 凭据或 baseURL（服务端配置）。
+        </p>
       </div>
 
       <div class="field">
@@ -184,7 +223,7 @@ async function save(): Promise<void> {
           block
           type="primary"
           :loading="conversation.creating"
-          :disabled="config.projectId.trim().length === 0"
+          :disabled="config.projectId.trim().length === 0 || !config.hasUsableModel"
           @click="emit('create')"
         >
           新建对话

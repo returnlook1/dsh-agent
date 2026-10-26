@@ -10,9 +10,13 @@
  */
 import { z } from 'zod'
 
-/** 默认模型路由（必须在 DSH Provider 中真实存在）。 */
-export const DEFAULT_PROVIDER = 'deepseek-official'
-export const DEFAULT_MODEL = 'deepseek-flash'
+/**
+ * 未指定模型路由时的占位值。
+ *
+ * 空字符串表示"由服务从 DSH 的可用清单里选择默认项"——provider/model 的权威来源是
+ * DSH 运行时（`ctx.llm.listProviders()` / `listModels()`），服务不写死任何模型名。
+ */
+export const UNSET_ROUTE = ''
 
 /**
  * 可配置能力（项目级与对话级共用同一形状）。
@@ -25,10 +29,10 @@ export const agentConfigSchema = z.object({
   skills: z.array(z.string().min(1)).default([]),
   /** 启用的 MCP 服务器 id（引用服务侧 `config/mcp-servers.json` 的定义）。 */
   mcpServers: z.array(z.string().min(1)).default([]),
-  /** Provider id，必须与 DSH 实际注册名一致。 */
-  provider: z.string().min(1).default(DEFAULT_PROVIDER),
-  /** 模型 id，必须以 Provider 实际返回的名称为准。 */
-  model: z.string().min(1).default(DEFAULT_MODEL),
+  /** Provider id；空字符串表示由服务按 DSH 可用清单选择默认值。 */
+  provider: z.string().default(UNSET_ROUTE),
+  /** 模型 id；空字符串表示由服务按 DSH 可用清单选择默认值。 */
+  model: z.string().default(UNSET_ROUTE),
   /** 服务端系统提示词；为空时使用运行时默认提示词。 */
   systemPrompt: z.string().max(20_000).default(''),
 })

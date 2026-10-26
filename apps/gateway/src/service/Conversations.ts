@@ -19,28 +19,26 @@ import type {
   ProjectAgentConfigDto,
   ToolCallRecord,
 } from '@agent-studio/shared'
-import {
-  DEFAULT_MODEL,
-  DEFAULT_PROVIDER,
-  agentConfigSchema,
-  mergeAgentConfig,
-  unique,
-} from '@agent-studio/shared'
+import { agentConfigSchema, mergeAgentConfig, unique } from '@agent-studio/shared'
 import type { Logger } from '../logger.js'
-import { conflict, conversationRunning, conversationStarted, notFound } from '../http/errors.js'
+import { conversationRunning, conversationStarted, modelUnavailable, modelUnknown, notFound } from '../http/errors.js'
+import type { ModelCatalogService } from '../models/ModelCatalogService.js'
 import type { McpConfig } from '../mcp/McpConfig.js'
 import type { SkillSource } from '../skills/SkillSource.js'
 import type { Store } from '../store/Store.js'
 import type { MessageLog, MessageListResult } from '../store/MessageLog.js'
 import { computeConfigKey } from '../runtime/ConfigKey.js'
 
-/** 默认能力配置（项目未保存、对话未继承时使用）。 */
+/**
+ * 默认能力配置（项目未保存、对话未继承时使用）。
+ *
+ * provider/model 留空：由 `ModelCatalogService` 从 DSH 的可用清单里选择默认项，
+ * 这里**不写死**任何模型名。
+ */
 export function defaultAgentConfig(): AgentConfig {
   return agentConfigSchema.parse({
     skills: [],
     mcpServers: [],
-    provider: DEFAULT_PROVIDER,
-    model: DEFAULT_MODEL,
     systemPrompt: '',
   })
 }
@@ -64,6 +62,8 @@ export interface ConversationServiceDeps {
   messages: MessageLog
   skills: SkillSource
   mcp: McpConfig
+  /** 模型清单（权威来源是 DSH；这里只做默认值与校验）。 */
+  models: ModelCatalogService
   logger: Logger
   now?: () => number
 }
@@ -84,6 +84,17 @@ export class ConversationService {
     return config
   }
 
+  /**
+   * 补全并校验 provider/model：
+   * 空值 → DSH 清单里的默认路由；显式值 → 必须在清单里（400 MODEL_UNKNOWN）。
+   */
+  private resolveRoute(config: AgentConfig): AgentConfig {
+    return this.deps.models.resolveConfig(config, {
+      unknown: (message, details) => modelUnknown(message, details),
+      unavailable: (message) => modelUnavailable(message),
+    })
+  }
+
   private snapshot(config: AgentConfig, projectId: string, inheritedFromProject: boolean): AgentConfigSnapshot {
     return {
       ...config,
@@ -99,7 +110,8 @@ export class ConversationService {
   getProjectConfig(projectId: string): ProjectAgentConfigDto {
     const record = this.deps.store.getProject(projectId)
     if (record === undefined) {
-      return { ...defaultAgentConfig(), projectId, saved: false }
+      // 未保存过：返回"DSH 默认路由 + 空能力"，前端可直接展示。
+      return { ...this.resolveRoute(defaultAgentConfig()), projectId, saved: false }
     }
     return { ...record.config, projectId, saved: true, updatedAt: record.updatedAt }
   }
@@ -108,10 +120,12 @@ export class ConversationService {
   updateProjectConfig(projectId: string, patch: AgentConfigPatch): ProjectAgentConfigDto {
     const base = this.deps.store.getProject(projectId)?.config ?? defaultAgentConfig()
     const next = this.validate(
-      agentConfigSchema.parse({
-        ...base,
-        ...stripUndefined(patch as Record<string, unknown>),
-      }),
+      this.resolveRoute(
+        agentConfigSchema.parse({
+          ...base,
+          ...stripUndefined(patch as Record<string, unknown>),
+        }),
+      ),
     )
     const record = this.deps.store.saveProject(projectId, next)
     return { ...record.config, projectId, saved: true, updatedAt: record.updatedAt }
@@ -139,7 +153,7 @@ export class ConversationService {
       model: input.model,
       systemPrompt: input.systemPrompt,
     })
-    const merged = this.validate(mergeAgentConfig(project, override, inherit))
+    const merged = this.validate(this.resolveRoute(mergeAgentConfig(project, override, inherit)))
     const timestamp = this.now()
 
     const record: ConversationDto = {
@@ -171,13 +185,15 @@ export class ConversationService {
 
     const current = record.config
     const nextConfig = this.validate(
-      agentConfigSchema.parse({
-        skills: patch.skills ?? current.skills,
-        mcpServers: patch.mcpServers ?? current.mcpServers,
-        provider: patch.provider ?? current.provider,
-        model: patch.model ?? current.model,
-        systemPrompt: patch.systemPrompt ?? current.systemPrompt,
-      }),
+      this.resolveRoute(
+        agentConfigSchema.parse({
+          skills: patch.skills ?? current.skills,
+          mcpServers: patch.mcpServers ?? current.mcpServers,
+          provider: patch.provider ?? current.provider,
+          model: patch.model ?? current.model,
+          systemPrompt: patch.systemPrompt ?? current.systemPrompt,
+        }),
+      ),
     )
 
     const snapshot: AgentConfigSnapshot = {

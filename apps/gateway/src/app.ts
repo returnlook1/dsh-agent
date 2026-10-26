@@ -13,6 +13,7 @@ import { ApiError, registerErrorHandler } from './http/errors.js'
 import { registerConversationRoutes } from './api/conversations.js'
 import { registerHealthRoutes } from './api/health.js'
 import { registerMcpRoutes } from './api/mcp.js'
+import { registerModelRoutes } from './api/models.js'
 import { registerProjectRoutes } from './api/projects.js'
 import { registerSkillRoutes } from './api/skills.js'
 
@@ -84,6 +85,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   registerHealthRoutes(app, ctx)
   registerSkillRoutes(app, ctx)
   registerMcpRoutes(app, ctx)
+  registerModelRoutes(app, ctx)
   registerProjectRoutes(app, ctx)
   registerConversationRoutes(app, ctx)
 

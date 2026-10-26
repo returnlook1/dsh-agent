@@ -15,9 +15,9 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
 | 类型检查（4 个包） | `npm run typecheck` | ✅ 0 错误 |
-| 单元测试 | `npm test` | ✅ 12 文件 / **127 用例** |
+| 单元测试 | `npm test` | ✅ 15 文件 / **153 用例** |
 | 运行时检查（真实 DSH） | `npm run check:runtime` | ✅ **12 项断言** / 3 个场景 |
-| 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **48 项断言** / 2 个阶段 |
+| 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **55 项断言** / 2 个阶段 |
 | 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 135 kB，CSS gzip 79 kB） |
 | 手工演示 | `npm run demo` | ✅ 选技能 → 发消息 → 工具调用 → 回答（见 §5） |
 
@@ -25,7 +25,7 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 
 ---
 
-## 2. 单元测试（127 用例）
+## 2. 单元测试（153 用例）
 
 | 范围 | 用例 | 覆盖点 |
 | --- | --- | --- |
@@ -37,6 +37,8 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 | `apps/gateway/tests/events` | 12 | DSH 事件 → 5 个业务事件、`assistant/message` 去重、`turn/end{error}`、工具配对 |
 | `apps/gateway/tests/runtime/pool` | 9 | 复用/上限/回收/resume/传输错误广播 |
 | `apps/gateway/tests/api/service` | 25 | 全部接口与错误码（400/401/404/409/503） |
+| `apps/gateway/tests/models/*` | 24 | 探针输出解析、默认路由、`MODEL_UNKNOWN`/`MODEL_UNAVAILABLE`、缓存与降级 |
+| `apps/gateway/tests/api/models` | 7 | `GET /api/models`、不传模型落默认路由、未知 provider/model 400 |
 | `plugins/agent-tools` | 27 | 参数边界、站点白名单、确定性输出、目录一致性 |
 | `apps/web/tests` | 16 | SSE 解析（分块/CRLF/`: ping`/多行 data/`message.failed` 提前终止）、事件归并、409、历史回放 |
 
@@ -84,6 +86,24 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 - `/api/runtimes` 变为 **2 个**运行时，MCP 运行时的 `mcpServers` 含 `data-center`。
 
 ---
+
+## 4.3 模型清单来自 DSH（实测）
+
+`npm run demo` 启动时服务会向真实 DSH 询问模型清单，实际观察：
+
+```
+GET /api/models
+source: live
+default: deepseek-official / deepseek-flash
+provider: deepseek-official [DeepSeek] models=deepseek-flash,deepseek-v4-pro
+```
+
+- 探针进程在 provider 激活后返回（`providerWaitMs ≈ 160ms`，整体约 1.2s）；
+- 项目配置未保存时返回的默认值就是清单里的默认路由；
+- 创建对话不传 provider/model → 快照里是 `deepseek-official / deepseek-flash`；
+- `model: "gpt-4o"` → `400 MODEL_UNKNOWN`，details 带 `availableModels`；
+- `provider: "openai"` → `400 MODEL_UNKNOWN`，details 带可用 provider；
+- `GET /api/models?refresh=1` → 重新探测（`source: live`）。
 
 ## 5. 手工演示（`npm run demo`，离线）
 

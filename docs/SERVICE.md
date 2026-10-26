@@ -87,6 +87,8 @@ runtime/snapshots/<configKey>/
 | `RUNTIME_IDLE_MS` | `300000` | 空闲运行时回收（回收后同配置下次会 resume） |
 | `TURN_TIMEOUT_MS` | `600000` | 单轮上限，超时按失败处理并关闭该运行时 |
 | `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 Bearer |
+| `AGENT_SERVICE_MODEL_DISCOVERY` | `on` | `off` = 关闭向 DSH 询问模型清单（仅用缓存） |
+| `AGENT_SERVICE_MODEL_PROBE` | gateway 构建产物 | 模型探针插件入口（一般不用改） |
 | `CORS_ORIGINS` | – | 逗号分隔的允许来源；默认同源 |
 | `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
 | `LOG_LEVEL` | `info` | |
@@ -112,6 +114,25 @@ runtime/snapshots/<configKey>/
 ```
 
 `${ENV}` 占位在**生成运行时配置时**从服务进程环境解析；解析不到就报错，不写空值。
+
+### 3.2b 模型清单来自 DSH
+
+provider / model **不写死在服务里**。`0.2.1-rc.3` 的 SDK 协议没有"列模型"的方法，
+provider 由 Cordis 插件在运行时注册，模型目录由 adapter 提供（官方端点用 `/models`
+列表，非官方端点用内建目录）。因此服务启动时：
+
+1. 用同一个 profile 物化一个**探针快照**（`runtime/snapshots/_model-probe`）；
+2. 起一个短命的 DSH 子进程，插入探针插件（`runtime/model-probe-plugin`），
+   它等 provider 插件激活后调用 `ctx.llm.listProviders()` / `listModels()` 写结果文件；
+3. 服务读取结果、写 `data/models.json` 缓存，然后杀掉探针进程（约 1~2s）。
+
+规则：
+
+- **默认路由** = 清单里第一个有模型的 provider 的首个模型；
+- 配置里 `provider`/`model` 为空 → 用默认路由补全；
+- 显式值不在清单里 → `400 MODEL_UNKNOWN`（附可用清单）；
+- 清单不可用且没有显式值 → `503 MODEL_UNAVAILABLE`；有显式值则放行（运行时会给更精确的错误）；
+- `GET /api/models?refresh=1` 强制重新发现（换 Provider / baseURL 后不用重启服务）。
 
 ### 3.3 技能目录
 
@@ -176,11 +197,12 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 ## 7. HTTP API
 
 统一前缀 `/api`。错误：`{ error: { code, message, details? } }`，code 用
-`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
+`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | MODEL_UNKNOWN | MODEL_UNAVAILABLE | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | `{ ok, version, dshVersion, runtimes, uptimeSec }` |
+| GET | `/api/models` | **从 DSH 读取**的 provider / model 清单（`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
 | GET | `/api/mcp-servers` | 可用 MCP 服务器 |
 | GET | `/api/projects/:projectId/agent-config` | 项目默认配置（未保存返回默认值 + `saved:false`） |

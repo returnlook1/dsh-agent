@@ -18,6 +18,7 @@ data/*.db-shm
 data/.auth-secret
 data/conversations/
 data/store.json
+data/models.json
 runtime/snapshots/
 runtime/homes/
 runtime/workspaces/

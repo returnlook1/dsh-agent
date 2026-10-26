@@ -114,6 +114,29 @@ message.started / message.completed / tool.started / tool.completed / message.fa
 
 ---
 
+## 5b. provider/model 清单来自 DSH，不写死
+
+早先的实现把 `deepseek-official` / `deepseek-flash` 写成常量（schema 默认值 + 前端常量）。
+问题：换 Provider、换 baseURL、升级 DSH 后模型目录会变，常量立刻变成过期知识，而且
+"配置里保存了什么"和"运行时实际能用什么"会脱节。
+
+现在的做法：启动时用一个 **探针插件**在真实的 DSH 子进程里调用
+`ctx.llm.listProviders()` / `listModels()`，把结果写文件、进程退出；服务读取并缓存
+（内存 + `data/models.json`）。
+
+关键实现细节（踩过的两个坑）：
+
+1. **`inject: ['llm']` 不够**：它只保证 LLM 服务就绪，不保证 adapter 插件（`llm-deepseek-api-key`）
+   已激活。探针必须轮询 `listProviders()`（实测 161ms 后才有），否则会得到空清单。
+2. **默认模型没用 `agent-default-model`**：`sdk-minimal` 组合里没有这个插件，所以默认路由由
+   清单决定（第一个有模型的 provider 的首个模型），而不是读某个配置项。
+
+被否决的方案：
+
+- 解析 `--dump-config`：配置里只有 adapter 的 `models` 覆盖项，真正的目录在运行时；
+- 直接 `require` provider 包的 `DEFAULT_MODELS`：只覆盖官方内建目录，第三方 Provider 失效；
+- 让前端写死候选项：UI 与后端的可用性会长期不一致。
+
 ## 6. 凭据与子进程隔离
 
 - 凭据只通过**子进程环境变量** `DEEPSEEK_API_KEY` 注入（`MOCK_LLM` 时指向本地 mock）；不落盘、不进

@@ -233,6 +233,19 @@ async function phaseA() {
     check('技能带 description', typeof skillEntry?.description === 'string' && skillEntry.description.length > 0)
     check('技能 roots 可见', Array.isArray(skills.body?.roots) && skills.body.roots.length > 0, JSON.stringify(skills.body?.roots))
 
+    // ---- 模型清单必须来自 DSH（而不是服务里写死的常量）
+    const models = await request(s.baseUrl, '/api/models')
+    check('GET /api/models 200', models.status === 200, `status=${models.status}`)
+    const providers = models.body?.providers ?? []
+    check('模型清单来自运行时（source=live）', models.body?.source === 'live', String(models.body?.source))
+    check('清单含 deepseek-official', providers.some((item) => item.id === 'deepseek-official'),
+      JSON.stringify(providers.map((item) => item.id)))
+    const officialModels = (providers.find((item) => item.id === 'deepseek-official')?.models ?? []).map((item) => item.id)
+    check('清单含 deepseek-flash', officialModels.includes('deepseek-flash'), JSON.stringify(officialModels))
+    check('默认路由由清单给出',
+      (models.body?.default?.provider ?? '') !== '' && (models.body?.default?.model ?? '') !== '',
+      JSON.stringify(models.body?.default))
+
     const mcp = await request(s.baseUrl, '/api/mcp-servers')
     check('GET /api/mcp-servers 200', mcp.status === 200)
     const mcpIds = (mcp.body?.servers ?? []).map((server) => server.id)
@@ -263,6 +276,13 @@ async function phaseA() {
       body: JSON.stringify({ projectId, mcpServers: ['no-such-server'] }),
     })
     check('未知 MCP 返回 400 MCP_UNKNOWN', badMcp.status === 400 && badMcp.body?.error?.code === 'MCP_UNKNOWN', JSON.stringify(badMcp.body))
+    const badModel = await request(s.baseUrl, '/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, model: 'no-such-model' }),
+    })
+    check('未知模型返回 400 MODEL_UNKNOWN',
+      badModel.status === 400 && badModel.body?.error?.code === 'MODEL_UNKNOWN',
+      `status=${badModel.status} ${JSON.stringify(badModel.body)}`)
 
     // ---- 创建对话（继承项目配置）
     const created = await request(s.baseUrl, '/api/conversations', {
@@ -275,6 +295,9 @@ async function phaseA() {
     check('返回 conversationId + sessionId', typeof conversationId === 'string' && typeof sessionId === 'string')
     const snapshot = created.body?.config
     check('快照继承项目 skills', (snapshot?.skills ?? []).includes('netcdf-analysis'), JSON.stringify(snapshot?.skills))
+    check('快照的 provider/model 来自 DSH 清单',
+      snapshot?.provider === models.body?.default?.provider && snapshot?.model === models.body?.default?.model,
+      JSON.stringify({ provider: snapshot?.provider, model: snapshot?.model }))
     check('快照带 configKey', typeof snapshot?.configKey === 'string' && snapshot.configKey.length >= 8, String(snapshot?.configKey))
     check('快照记录继承来源', snapshot?.inheritedFromProject === true)
 

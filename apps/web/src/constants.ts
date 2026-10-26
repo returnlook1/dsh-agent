@@ -6,8 +6,7 @@
  * 类型：Vite/Rollup 解析 shared 源码里的 `export * from './x.js'` 时不会映射回
  * `.ts`，而且 `packages/shared/dist` 是构建产物；只依赖类型可避免这两点。
  */
-export const DEFAULT_PROVIDER = 'deepseek-official'
-export const DEFAULT_MODEL = 'deepseek-flash'
+// provider/model 不再有本地默认值：权威来源是 `GET /api/models`（DSH 运行时）。
 
 /** 稳定去重（保留首次出现顺序），与 shared 的 `unique()` 行为一致。 */
 export function uniqueStrings(values: readonly string[]): string[] {

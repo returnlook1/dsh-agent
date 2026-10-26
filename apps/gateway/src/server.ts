@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { REPO_ROOT, describeConfig, loadConfig, type GatewayConfig } from './config.js'
 import { createLogger, type Logger } from './logger.js'
 import { McpConfig } from './mcp/McpConfig.js'
+import { ModelDiscovery } from './models/ModelDiscovery.js'
+import { ModelCatalogService } from './models/ModelCatalogService.js'
 import { SnapshotMaterializer } from './runtime/SnapshotMaterializer.js'
 import { RuntimePool, type RuntimeClientFactory } from './runtime/RuntimePool.js'
 import { createHarnessRuntimeClient } from './runtime/HarnessRuntimeClient.js'
@@ -37,7 +39,7 @@ export function skillRoots(config: GatewayConfig): SkillRoot[] {
 export function createServices(
   config: GatewayConfig,
   logger: Logger,
-  options: { clientFactory?: RuntimeClientFactory } = {},
+  options: { clientFactory?: RuntimeClientFactory; models?: ModelCatalogService } = {},
 ): AppContext {
   fs.mkdirSync(config.dataDir, { recursive: true })
   fs.mkdirSync(config.runtimeDir, { recursive: true })
@@ -64,11 +66,28 @@ export function createServices(
     skills,
     mcp,
   })
+  // 模型清单：从 DSH 探针获取（失败降级到磁盘缓存，绝不写死模型名）
+  const models =
+    options.models ??
+    new ModelCatalogService({
+      discovery:
+        config.modelDiscovery && options.clientFactory === undefined
+          ? new ModelDiscovery({
+              config,
+              logger: logger.child({ component: 'model-discovery' }),
+              materializer,
+              probePluginPath: config.modelProbePlugin,
+            })
+          : undefined,
+      logger: logger.child({ component: 'models' }),
+      cachePath: config.modelsCachePath,
+    })
   const conversations = new ConversationService({
     store,
     messages: messageLog,
     skills,
     mcp,
+    models,
     logger: logger.child({ component: 'conversations' }),
   })
   const hub = new SseHub(logger.child({ component: 'sse' }))
@@ -95,6 +114,7 @@ export function createServices(
     catalog,
     skills,
     mcp,
+    models,
     conversations,
     pool,
     hub,
@@ -108,6 +128,8 @@ export async function main(): Promise<void> {
   logger.info('starting DSH agent service', describeConfig(config))
 
   const ctx = createServices(config, logger)
+  // 启动时向 DSH 询问可用模型（失败只记日志，服务仍可启动并回落到缓存）。
+  await ctx.models.ensure()
   const app = await buildApp(ctx)
   ctx.pool.startReaper()
 

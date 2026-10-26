@@ -1012,3 +1012,27 @@ pre,
     max-width: 100%;
   }
 }
+
+/* Provider / Model：两个下拉并排（窄屏自动换行） */
+.model-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--as-space-2);
+}
+
+@media (max-width: 1420px) {
+  .model-route {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.model-route__provider,
+.model-route__model {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 危险提示（模型清单不可用、请求失败等） */
+.field__hint--danger {
+  color: var(--as-danger, #d9463f);
+}
