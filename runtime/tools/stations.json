@@ -1,0 +1,2243 @@
+{
+  "generatedAt": "2026-10-25T00:00:00.000Z",
+  "period": {
+    "from": "2026-09-26",
+    "to": "2026-10-25"
+  },
+  "stations": [
+    {
+      "id": "ST-3101",
+      "name": "东湖一号监测站",
+      "region": "东湖流域",
+      "river": "东湖",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 7.85,
+          "indicators": {
+            "ph": 8.01,
+            "codmn": 2.31,
+            "ammoniaNitrogen": 0.529,
+            "totalPhosphorus": 0.057,
+            "turbidity": 5
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 8.22,
+          "indicators": {
+            "ph": 7.5,
+            "codmn": 3.6,
+            "ammoniaNitrogen": 0.518,
+            "totalPhosphorus": 0.086,
+            "turbidity": 10.3
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 6.07,
+          "indicators": {
+            "ph": 7.77,
+            "codmn": 2.9,
+            "ammoniaNitrogen": 0.787,
+            "totalPhosphorus": 0.097,
+            "turbidity": 18.7
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 8.54,
+          "indicators": {
+            "ph": 7.67,
+            "codmn": 4.61,
+            "ammoniaNitrogen": 0.151,
+            "totalPhosphorus": 0.028,
+            "turbidity": 27.1
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 8.24,
+          "indicators": {
+            "ph": 7.44,
+            "codmn": 4.77,
+            "ammoniaNitrogen": 0.466,
+            "totalPhosphorus": 0.096,
+            "turbidity": 24.6
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 7.47,
+          "indicators": {
+            "ph": 7.69,
+            "codmn": 3.92,
+            "ammoniaNitrogen": 0.388,
+            "totalPhosphorus": 0.113,
+            "turbidity": 18.7
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 8.73,
+          "indicators": {
+            "ph": 8.13,
+            "codmn": 4.32,
+            "ammoniaNitrogen": 0.189,
+            "totalPhosphorus": 0.105,
+            "turbidity": 29.5
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 8.47,
+          "indicators": {
+            "ph": 7.87,
+            "codmn": 3.64,
+            "ammoniaNitrogen": 0.634,
+            "totalPhosphorus": 0.034,
+            "turbidity": 22.2
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 6.45,
+          "indicators": {
+            "ph": 7.41,
+            "codmn": 4.6,
+            "ammoniaNitrogen": 0.402,
+            "totalPhosphorus": 0.097,
+            "turbidity": 15.8
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 8.5,
+          "indicators": {
+            "ph": 7.6,
+            "codmn": 2.75,
+            "ammoniaNitrogen": 0.613,
+            "totalPhosphorus": 0.038,
+            "turbidity": 10.3
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 6.48,
+          "indicators": {
+            "ph": 7.72,
+            "codmn": 4.1,
+            "ammoniaNitrogen": 0.236,
+            "totalPhosphorus": 0.025,
+            "turbidity": 15.6
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 7.25,
+          "indicators": {
+            "ph": 8.05,
+            "codmn": 2.56,
+            "ammoniaNitrogen": 0.643,
+            "totalPhosphorus": 0.115,
+            "turbidity": 21.1
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 7.07,
+          "indicators": {
+            "ph": 7.42,
+            "codmn": 3.02,
+            "ammoniaNitrogen": 0.793,
+            "totalPhosphorus": 0.041,
+            "turbidity": 14.8
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 6.08,
+          "indicators": {
+            "ph": 7.86,
+            "codmn": 5.21,
+            "ammoniaNitrogen": 0.688,
+            "totalPhosphorus": 0.111,
+            "turbidity": 7.7
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 7.08,
+          "indicators": {
+            "ph": 7.11,
+            "codmn": 2.38,
+            "ammoniaNitrogen": 0.112,
+            "totalPhosphorus": 0.042,
+            "turbidity": 27.3
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 7.13,
+          "indicators": {
+            "ph": 7.85,
+            "codmn": 5.32,
+            "ammoniaNitrogen": 0.542,
+            "totalPhosphorus": 0.09,
+            "turbidity": 21.5
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 8.02,
+          "indicators": {
+            "ph": 7.55,
+            "codmn": 2.37,
+            "ammoniaNitrogen": 0.501,
+            "totalPhosphorus": 0.049,
+            "turbidity": 23.5
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 7.98,
+          "indicators": {
+            "ph": 7.87,
+            "codmn": 3.31,
+            "ammoniaNitrogen": 0.517,
+            "totalPhosphorus": 0.072,
+            "turbidity": 13.7
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 6.82,
+          "indicators": {
+            "ph": 7.4,
+            "codmn": 3.53,
+            "ammoniaNitrogen": 0.119,
+            "totalPhosphorus": 0.11,
+            "turbidity": 5.3
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 6.27,
+          "indicators": {
+            "ph": 7.3,
+            "codmn": 3.88,
+            "ammoniaNitrogen": 0.649,
+            "totalPhosphorus": 0.085,
+            "turbidity": 6.1
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 8.25,
+          "indicators": {
+            "ph": 7.93,
+            "codmn": 3.96,
+            "ammoniaNitrogen": 0.481,
+            "totalPhosphorus": 0.114,
+            "turbidity": 5.3
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 7.17,
+          "indicators": {
+            "ph": 7.88,
+            "codmn": 3.79,
+            "ammoniaNitrogen": 0.149,
+            "totalPhosphorus": 0.044,
+            "turbidity": 14.3
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 6.73,
+          "indicators": {
+            "ph": 7.23,
+            "codmn": 4.48,
+            "ammoniaNitrogen": 0.518,
+            "totalPhosphorus": 0.101,
+            "turbidity": 5.5
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 8.54,
+          "indicators": {
+            "ph": 7.23,
+            "codmn": 2.12,
+            "ammoniaNitrogen": 0.124,
+            "totalPhosphorus": 0.064,
+            "turbidity": 19.3
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 6.22,
+          "indicators": {
+            "ph": 7.46,
+            "codmn": 2.26,
+            "ammoniaNitrogen": 0.633,
+            "totalPhosphorus": 0.083,
+            "turbidity": 5
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 8.18,
+          "indicators": {
+            "ph": 7.86,
+            "codmn": 4.49,
+            "ammoniaNitrogen": 0.19,
+            "totalPhosphorus": 0.043,
+            "turbidity": 9.4
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 7.77,
+          "indicators": {
+            "ph": 8.06,
+            "codmn": 2.13,
+            "ammoniaNitrogen": 0.663,
+            "totalPhosphorus": 0.056,
+            "turbidity": 20.8
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 6,
+          "indicators": {
+            "ph": 7.35,
+            "codmn": 2.85,
+            "ammoniaNitrogen": 0.269,
+            "totalPhosphorus": 0.118,
+            "turbidity": 8.3
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 7.52,
+          "indicators": {
+            "ph": 8.04,
+            "codmn": 4.12,
+            "ammoniaNitrogen": 0.594,
+            "totalPhosphorus": 0.084,
+            "turbidity": 18.5
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 6.92,
+          "indicators": {
+            "ph": 7.48,
+            "codmn": 5.25,
+            "ammoniaNitrogen": 0.747,
+            "totalPhosphorus": 0.113,
+            "turbidity": 24.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "ST-3102",
+      "name": "南湖入湖口监测站",
+      "region": "南湖流域",
+      "river": "南湖",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 6.1,
+          "indicators": {
+            "ph": 7.88,
+            "codmn": 4.22,
+            "ammoniaNitrogen": 0.758,
+            "totalPhosphorus": 0.051,
+            "turbidity": 14.7
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 6.93,
+          "indicators": {
+            "ph": 7.38,
+            "codmn": 4.95,
+            "ammoniaNitrogen": 0.411,
+            "totalPhosphorus": 0.105,
+            "turbidity": 5.1
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 6.91,
+          "indicators": {
+            "ph": 8,
+            "codmn": 2.65,
+            "ammoniaNitrogen": 0.628,
+            "totalPhosphorus": 0.104,
+            "turbidity": 23.5
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 7.98,
+          "indicators": {
+            "ph": 7.83,
+            "codmn": 4.45,
+            "ammoniaNitrogen": 0.17,
+            "totalPhosphorus": 0.127,
+            "turbidity": 15.9
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 7.91,
+          "indicators": {
+            "ph": 7.85,
+            "codmn": 2.74,
+            "ammoniaNitrogen": 0.157,
+            "totalPhosphorus": 0.037,
+            "turbidity": 7.9
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 6.71,
+          "indicators": {
+            "ph": 7.29,
+            "codmn": 2.32,
+            "ammoniaNitrogen": 0.635,
+            "totalPhosphorus": 0.115,
+            "turbidity": 21.9
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 8.6,
+          "indicators": {
+            "ph": 7.6,
+            "codmn": 4.5,
+            "ammoniaNitrogen": 0.225,
+            "totalPhosphorus": 0.04,
+            "turbidity": 25
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 7.51,
+          "indicators": {
+            "ph": 7.99,
+            "codmn": 4.8,
+            "ammoniaNitrogen": 0.353,
+            "totalPhosphorus": 0.021,
+            "turbidity": 22.4
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 7.38,
+          "indicators": {
+            "ph": 7.95,
+            "codmn": 3.46,
+            "ammoniaNitrogen": 0.091,
+            "totalPhosphorus": 0.049,
+            "turbidity": 10.9
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 6.85,
+          "indicators": {
+            "ph": 7.75,
+            "codmn": 5.34,
+            "ammoniaNitrogen": 0.706,
+            "totalPhosphorus": 0.125,
+            "turbidity": 15.6
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 8.54,
+          "indicators": {
+            "ph": 8,
+            "codmn": 3.32,
+            "ammoniaNitrogen": 0.49,
+            "totalPhosphorus": 0.044,
+            "turbidity": 22.9
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 6.74,
+          "indicators": {
+            "ph": 8,
+            "codmn": 2.56,
+            "ammoniaNitrogen": 0.151,
+            "totalPhosphorus": 0.021,
+            "turbidity": 10.3
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 6.93,
+          "indicators": {
+            "ph": 7.32,
+            "codmn": 4.33,
+            "ammoniaNitrogen": 0.619,
+            "totalPhosphorus": 0.105,
+            "turbidity": 23.7
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 7.42,
+          "indicators": {
+            "ph": 7.69,
+            "codmn": 3.09,
+            "ammoniaNitrogen": 0.113,
+            "totalPhosphorus": 0.044,
+            "turbidity": 12.6
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 8.21,
+          "indicators": {
+            "ph": 7.84,
+            "codmn": 4.04,
+            "ammoniaNitrogen": 0.188,
+            "totalPhosphorus": 0.061,
+            "turbidity": 4.7
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 7,
+          "indicators": {
+            "ph": 7.52,
+            "codmn": 4.12,
+            "ammoniaNitrogen": 0.552,
+            "totalPhosphorus": 0.127,
+            "turbidity": 16.5
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 7.03,
+          "indicators": {
+            "ph": 7.47,
+            "codmn": 3.89,
+            "ammoniaNitrogen": 0.332,
+            "totalPhosphorus": 0.032,
+            "turbidity": 13.6
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 6.06,
+          "indicators": {
+            "ph": 7.38,
+            "codmn": 2.73,
+            "ammoniaNitrogen": 0.394,
+            "totalPhosphorus": 0.035,
+            "turbidity": 20
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 8.03,
+          "indicators": {
+            "ph": 7.36,
+            "codmn": 4.56,
+            "ammoniaNitrogen": 0.564,
+            "totalPhosphorus": 0.101,
+            "turbidity": 22.9
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 6.22,
+          "indicators": {
+            "ph": 7.4,
+            "codmn": 4.8,
+            "ammoniaNitrogen": 0.134,
+            "totalPhosphorus": 0.123,
+            "turbidity": 4.9
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 5.72,
+          "indicators": {
+            "ph": 7.73,
+            "codmn": 3.27,
+            "ammoniaNitrogen": 0.093,
+            "totalPhosphorus": 0.038,
+            "turbidity": 11.9
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 8.16,
+          "indicators": {
+            "ph": 8.12,
+            "codmn": 3.73,
+            "ammoniaNitrogen": 0.176,
+            "totalPhosphorus": 0.046,
+            "turbidity": 13
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 7.69,
+          "indicators": {
+            "ph": 8.06,
+            "codmn": 4.71,
+            "ammoniaNitrogen": 0.297,
+            "totalPhosphorus": 0.128,
+            "turbidity": 24.4
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 7.24,
+          "indicators": {
+            "ph": 7.59,
+            "codmn": 2.12,
+            "ammoniaNitrogen": 0.403,
+            "totalPhosphorus": 0.12,
+            "turbidity": 12.6
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 7.96,
+          "indicators": {
+            "ph": 7.63,
+            "codmn": 2.49,
+            "ammoniaNitrogen": 0.25,
+            "totalPhosphorus": 0.089,
+            "turbidity": 18
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 7.56,
+          "indicators": {
+            "ph": 7.93,
+            "codmn": 4.2,
+            "ammoniaNitrogen": 0.174,
+            "totalPhosphorus": 0.022,
+            "turbidity": 24.6
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 6.27,
+          "indicators": {
+            "ph": 7.44,
+            "codmn": 3.82,
+            "ammoniaNitrogen": 0.299,
+            "totalPhosphorus": 0.075,
+            "turbidity": 29.3
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 8.35,
+          "indicators": {
+            "ph": 7.98,
+            "codmn": 4.34,
+            "ammoniaNitrogen": 0.597,
+            "totalPhosphorus": 0.057,
+            "turbidity": 9.2
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 7.88,
+          "indicators": {
+            "ph": 7.54,
+            "codmn": 5.37,
+            "ammoniaNitrogen": 0.404,
+            "totalPhosphorus": 0.036,
+            "turbidity": 18.3
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 8.2,
+          "indicators": {
+            "ph": 7.59,
+            "codmn": 4.32,
+            "ammoniaNitrogen": 0.291,
+            "totalPhosphorus": 0.066,
+            "turbidity": 16.4
+          }
+        }
+      ]
+    },
+    {
+      "id": "ST-3103",
+      "name": "汤逊湖中心监测站",
+      "region": "汤逊湖流域",
+      "river": "汤逊湖",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 7.41,
+          "indicators": {
+            "ph": 7.71,
+            "codmn": 2.15,
+            "ammoniaNitrogen": 0.614,
+            "totalPhosphorus": 0.112,
+            "turbidity": 23.8
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 5.84,
+          "indicators": {
+            "ph": 8.14,
+            "codmn": 3.45,
+            "ammoniaNitrogen": 0.523,
+            "totalPhosphorus": 0.03,
+            "turbidity": 11.5
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 8.46,
+          "indicators": {
+            "ph": 7.92,
+            "codmn": 2.98,
+            "ammoniaNitrogen": 0.69,
+            "totalPhosphorus": 0.048,
+            "turbidity": 29.9
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 5.82,
+          "indicators": {
+            "ph": 7.36,
+            "codmn": 2.36,
+            "ammoniaNitrogen": 0.673,
+            "totalPhosphorus": 0.037,
+            "turbidity": 19.9
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 6.51,
+          "indicators": {
+            "ph": 7.79,
+            "codmn": 5.02,
+            "ammoniaNitrogen": 0.281,
+            "totalPhosphorus": 0.09,
+            "turbidity": 9
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 7.22,
+          "indicators": {
+            "ph": 7.71,
+            "codmn": 3.53,
+            "ammoniaNitrogen": 0.639,
+            "totalPhosphorus": 0.129,
+            "turbidity": 17.8
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 6.44,
+          "indicators": {
+            "ph": 7.7,
+            "codmn": 4.62,
+            "ammoniaNitrogen": 0.498,
+            "totalPhosphorus": 0.036,
+            "turbidity": 24.1
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 8.03,
+          "indicators": {
+            "ph": 7.61,
+            "codmn": 3.33,
+            "ammoniaNitrogen": 0.379,
+            "totalPhosphorus": 0.024,
+            "turbidity": 11.7
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 6.77,
+          "indicators": {
+            "ph": 7.48,
+            "codmn": 2.31,
+            "ammoniaNitrogen": 0.094,
+            "totalPhosphorus": 0.025,
+            "turbidity": 21.1
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 6.23,
+          "indicators": {
+            "ph": 7.16,
+            "codmn": 3.89,
+            "ammoniaNitrogen": 0.123,
+            "totalPhosphorus": 0.063,
+            "turbidity": 19.4
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 8.16,
+          "indicators": {
+            "ph": 7.69,
+            "codmn": 5.29,
+            "ammoniaNitrogen": 0.489,
+            "totalPhosphorus": 0.099,
+            "turbidity": 17.1
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 6.52,
+          "indicators": {
+            "ph": 7.69,
+            "codmn": 4.22,
+            "ammoniaNitrogen": 0.307,
+            "totalPhosphorus": 0.051,
+            "turbidity": 29
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 6.87,
+          "indicators": {
+            "ph": 8.19,
+            "codmn": 2.36,
+            "ammoniaNitrogen": 0.369,
+            "totalPhosphorus": 0.08,
+            "turbidity": 20.3
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 6.36,
+          "indicators": {
+            "ph": 7.23,
+            "codmn": 4.57,
+            "ammoniaNitrogen": 0.35,
+            "totalPhosphorus": 0.027,
+            "turbidity": 4.5
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 6.01,
+          "indicators": {
+            "ph": 7.18,
+            "codmn": 4.68,
+            "ammoniaNitrogen": 0.245,
+            "totalPhosphorus": 0.069,
+            "turbidity": 13.7
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 6.42,
+          "indicators": {
+            "ph": 7.53,
+            "codmn": 3.8,
+            "ammoniaNitrogen": 0.678,
+            "totalPhosphorus": 0.061,
+            "turbidity": 10.6
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 5.91,
+          "indicators": {
+            "ph": 8.12,
+            "codmn": 2.2,
+            "ammoniaNitrogen": 0.398,
+            "totalPhosphorus": 0.111,
+            "turbidity": 18.3
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 7.11,
+          "indicators": {
+            "ph": 8.2,
+            "codmn": 4.37,
+            "ammoniaNitrogen": 0.664,
+            "totalPhosphorus": 0.071,
+            "turbidity": 16.1
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 7.87,
+          "indicators": {
+            "ph": 7.92,
+            "codmn": 3.32,
+            "ammoniaNitrogen": 0.587,
+            "totalPhosphorus": 0.023,
+            "turbidity": 11
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 6.52,
+          "indicators": {
+            "ph": 7.52,
+            "codmn": 4.59,
+            "ammoniaNitrogen": 0.111,
+            "totalPhosphorus": 0.101,
+            "turbidity": 21.2
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 7.58,
+          "indicators": {
+            "ph": 7.6,
+            "codmn": 2.21,
+            "ammoniaNitrogen": 0.695,
+            "totalPhosphorus": 0.119,
+            "turbidity": 12.9
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 6.62,
+          "indicators": {
+            "ph": 7.3,
+            "codmn": 5.18,
+            "ammoniaNitrogen": 0.479,
+            "totalPhosphorus": 0.073,
+            "turbidity": 28.9
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 7.65,
+          "indicators": {
+            "ph": 7.99,
+            "codmn": 4.94,
+            "ammoniaNitrogen": 0.569,
+            "totalPhosphorus": 0.059,
+            "turbidity": 18
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 6.32,
+          "indicators": {
+            "ph": 7.97,
+            "codmn": 3.09,
+            "ammoniaNitrogen": 0.16,
+            "totalPhosphorus": 0.05,
+            "turbidity": 19.4
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 6.93,
+          "indicators": {
+            "ph": 7.36,
+            "codmn": 3.1,
+            "ammoniaNitrogen": 0.468,
+            "totalPhosphorus": 0.062,
+            "turbidity": 20.9
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 5.71,
+          "indicators": {
+            "ph": 8.1,
+            "codmn": 3.83,
+            "ammoniaNitrogen": 0.536,
+            "totalPhosphorus": 0.072,
+            "turbidity": 14.5
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 8.17,
+          "indicators": {
+            "ph": 7.46,
+            "codmn": 2.5,
+            "ammoniaNitrogen": 0.088,
+            "totalPhosphorus": 0.025,
+            "turbidity": 21.3
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 7.83,
+          "indicators": {
+            "ph": 8.1,
+            "codmn": 4.65,
+            "ammoniaNitrogen": 0.477,
+            "totalPhosphorus": 0.128,
+            "turbidity": 21.3
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 6.41,
+          "indicators": {
+            "ph": 7.88,
+            "codmn": 4.63,
+            "ammoniaNitrogen": 0.352,
+            "totalPhosphorus": 0.106,
+            "turbidity": 6
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 6.12,
+          "indicators": {
+            "ph": 7.4,
+            "codmn": 4.25,
+            "ammoniaNitrogen": 0.481,
+            "totalPhosphorus": 0.115,
+            "turbidity": 26.8
+          }
+        }
+      ]
+    },
+    {
+      "id": "ST-4101",
+      "name": "汉江蔡甸断面",
+      "region": "汉江流域",
+      "river": "汉江",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality",
+        "hydrology"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 8.2,
+          "indicators": {
+            "ph": 7.29,
+            "codmn": 3.88,
+            "ammoniaNitrogen": 0.47,
+            "totalPhosphorus": 0.022,
+            "turbidity": 5.7,
+            "waterLevel": 18.81,
+            "flow": 562.1,
+            "waterTemperature": 20.1
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 5.62,
+          "indicators": {
+            "ph": 7.75,
+            "codmn": 2.6,
+            "ammoniaNitrogen": 0.424,
+            "totalPhosphorus": 0.108,
+            "turbidity": 17.1,
+            "waterLevel": 20.08,
+            "flow": 508.7,
+            "waterTemperature": 21.7
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 8.74,
+          "indicators": {
+            "ph": 8.05,
+            "codmn": 2.61,
+            "ammoniaNitrogen": 0.597,
+            "totalPhosphorus": 0.077,
+            "turbidity": 25.9,
+            "waterLevel": 20.72,
+            "flow": 601.9,
+            "waterTemperature": 22.2
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 8.08,
+          "indicators": {
+            "ph": 7.88,
+            "codmn": 4.39,
+            "ammoniaNitrogen": 0.175,
+            "totalPhosphorus": 0.127,
+            "turbidity": 25.9,
+            "waterLevel": 18.54,
+            "flow": 757.9,
+            "waterTemperature": 18.5
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 6.71,
+          "indicators": {
+            "ph": 7.66,
+            "codmn": 3.54,
+            "ammoniaNitrogen": 0.463,
+            "totalPhosphorus": 0.114,
+            "turbidity": 23.5,
+            "waterLevel": 18.94,
+            "flow": 482.9,
+            "waterTemperature": 21.3
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 7.62,
+          "indicators": {
+            "ph": 7.17,
+            "codmn": 4.53,
+            "ammoniaNitrogen": 0.31,
+            "totalPhosphorus": 0.109,
+            "turbidity": 4,
+            "waterLevel": 19.19,
+            "flow": 594,
+            "waterTemperature": 18
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 6.12,
+          "indicators": {
+            "ph": 7.72,
+            "codmn": 3.64,
+            "ammoniaNitrogen": 0.232,
+            "totalPhosphorus": 0.082,
+            "turbidity": 6.9,
+            "waterLevel": 19.75,
+            "flow": 799.3,
+            "waterTemperature": 20.4
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 8.67,
+          "indicators": {
+            "ph": 7.5,
+            "codmn": 4.66,
+            "ammoniaNitrogen": 0.351,
+            "totalPhosphorus": 0.065,
+            "turbidity": 7.1,
+            "waterLevel": 20.02,
+            "flow": 751.5,
+            "waterTemperature": 18.3
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 7.14,
+          "indicators": {
+            "ph": 7.98,
+            "codmn": 4.56,
+            "ammoniaNitrogen": 0.27,
+            "totalPhosphorus": 0.038,
+            "turbidity": 25.7,
+            "waterLevel": 20.75,
+            "flow": 790.8,
+            "waterTemperature": 19
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 5.74,
+          "indicators": {
+            "ph": 7.9,
+            "codmn": 4.18,
+            "ammoniaNitrogen": 0.513,
+            "totalPhosphorus": 0.027,
+            "turbidity": 29.3,
+            "waterLevel": 18.63,
+            "flow": 796.6,
+            "waterTemperature": 19.2
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 7.48,
+          "indicators": {
+            "ph": 7.22,
+            "codmn": 4.51,
+            "ammoniaNitrogen": 0.787,
+            "totalPhosphorus": 0.098,
+            "turbidity": 25.4,
+            "waterLevel": 20.69,
+            "flow": 518.9,
+            "waterTemperature": 22.5
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 7.75,
+          "indicators": {
+            "ph": 7.3,
+            "codmn": 3.13,
+            "ammoniaNitrogen": 0.562,
+            "totalPhosphorus": 0.093,
+            "turbidity": 27.7,
+            "waterLevel": 18.63,
+            "flow": 602,
+            "waterTemperature": 21.5
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 7.91,
+          "indicators": {
+            "ph": 7.75,
+            "codmn": 4.5,
+            "ammoniaNitrogen": 0.506,
+            "totalPhosphorus": 0.125,
+            "turbidity": 9.2,
+            "waterLevel": 18.47,
+            "flow": 776.1,
+            "waterTemperature": 17.3
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 7.96,
+          "indicators": {
+            "ph": 7.14,
+            "codmn": 2.93,
+            "ammoniaNitrogen": 0.552,
+            "totalPhosphorus": 0.04,
+            "turbidity": 26.4,
+            "waterLevel": 20.33,
+            "flow": 787.5,
+            "waterTemperature": 21.2
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 6.93,
+          "indicators": {
+            "ph": 7.34,
+            "codmn": 4.58,
+            "ammoniaNitrogen": 0.489,
+            "totalPhosphorus": 0.048,
+            "turbidity": 22.4,
+            "waterLevel": 19.74,
+            "flow": 491.3,
+            "waterTemperature": 17.8
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 8.77,
+          "indicators": {
+            "ph": 7.25,
+            "codmn": 2.84,
+            "ammoniaNitrogen": 0.333,
+            "totalPhosphorus": 0.121,
+            "turbidity": 9.4,
+            "waterLevel": 20.69,
+            "flow": 488.5,
+            "waterTemperature": 19.6
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 6.9,
+          "indicators": {
+            "ph": 8.17,
+            "codmn": 2.98,
+            "ammoniaNitrogen": 0.562,
+            "totalPhosphorus": 0.035,
+            "turbidity": 11.3,
+            "waterLevel": 20.43,
+            "flow": 432.1,
+            "waterTemperature": 18.6
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 7.41,
+          "indicators": {
+            "ph": 7.68,
+            "codmn": 2.7,
+            "ammoniaNitrogen": 0.763,
+            "totalPhosphorus": 0.118,
+            "turbidity": 22.7,
+            "waterLevel": 18.61,
+            "flow": 778.6,
+            "waterTemperature": 21.4
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 7.19,
+          "indicators": {
+            "ph": 8.05,
+            "codmn": 4.15,
+            "ammoniaNitrogen": 0.721,
+            "totalPhosphorus": 0.079,
+            "turbidity": 8.7,
+            "waterLevel": 18.97,
+            "flow": 682.6,
+            "waterTemperature": 19.2
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 8.09,
+          "indicators": {
+            "ph": 7.93,
+            "codmn": 2.53,
+            "ammoniaNitrogen": 0.551,
+            "totalPhosphorus": 0.103,
+            "turbidity": 8.2,
+            "waterLevel": 19.39,
+            "flow": 675.4,
+            "waterTemperature": 18.7
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 5.91,
+          "indicators": {
+            "ph": 7.43,
+            "codmn": 2.44,
+            "ammoniaNitrogen": 0.778,
+            "totalPhosphorus": 0.062,
+            "turbidity": 27.3,
+            "waterLevel": 19.83,
+            "flow": 454,
+            "waterTemperature": 18.8
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 7.32,
+          "indicators": {
+            "ph": 7.65,
+            "codmn": 5.12,
+            "ammoniaNitrogen": 0.436,
+            "totalPhosphorus": 0.103,
+            "turbidity": 27.4,
+            "waterLevel": 18.26,
+            "flow": 515.1,
+            "waterTemperature": 18.4
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 7.07,
+          "indicators": {
+            "ph": 7.19,
+            "codmn": 4.82,
+            "ammoniaNitrogen": 0.508,
+            "totalPhosphorus": 0.031,
+            "turbidity": 11.4,
+            "waterLevel": 19.68,
+            "flow": 470.7,
+            "waterTemperature": 18.2
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 7.4,
+          "indicators": {
+            "ph": 7.85,
+            "codmn": 3.21,
+            "ammoniaNitrogen": 0.14,
+            "totalPhosphorus": 0.05,
+            "turbidity": 28.2,
+            "waterLevel": 20.58,
+            "flow": 793.4,
+            "waterTemperature": 21.4
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 8.66,
+          "indicators": {
+            "ph": 7.34,
+            "codmn": 4.1,
+            "ammoniaNitrogen": 0.651,
+            "totalPhosphorus": 0.086,
+            "turbidity": 14.3,
+            "waterLevel": 18.66,
+            "flow": 587.6,
+            "waterTemperature": 16.8
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 8.25,
+          "indicators": {
+            "ph": 7.24,
+            "codmn": 3.2,
+            "ammoniaNitrogen": 0.2,
+            "totalPhosphorus": 0.076,
+            "turbidity": 14.5,
+            "waterLevel": 20.28,
+            "flow": 680.6,
+            "waterTemperature": 18.2
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 6.07,
+          "indicators": {
+            "ph": 7.63,
+            "codmn": 2.88,
+            "ammoniaNitrogen": 0.408,
+            "totalPhosphorus": 0.052,
+            "turbidity": 20.9,
+            "waterLevel": 20.34,
+            "flow": 509.7,
+            "waterTemperature": 19.7
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 6.7,
+          "indicators": {
+            "ph": 7.59,
+            "codmn": 2.96,
+            "ammoniaNitrogen": 0.662,
+            "totalPhosphorus": 0.103,
+            "turbidity": 24.6,
+            "waterLevel": 19.26,
+            "flow": 691.7,
+            "waterTemperature": 19.5
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 8.05,
+          "indicators": {
+            "ph": 8.08,
+            "codmn": 2.83,
+            "ammoniaNitrogen": 0.172,
+            "totalPhosphorus": 0.02,
+            "turbidity": 23.6,
+            "waterLevel": 20.43,
+            "flow": 522.6,
+            "waterTemperature": 17.6
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 7.91,
+          "indicators": {
+            "ph": 8,
+            "codmn": 4.09,
+            "ammoniaNitrogen": 0.556,
+            "totalPhosphorus": 0.054,
+            "turbidity": 25,
+            "waterLevel": 19.9,
+            "flow": 737.7,
+            "waterTemperature": 20.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "ST-4102",
+      "name": "府河李家墩断面",
+      "region": "府河流域",
+      "river": "府河",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality",
+        "hydrology"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 7.26,
+          "indicators": {
+            "ph": 7.77,
+            "codmn": 3.69,
+            "ammoniaNitrogen": 0.344,
+            "totalPhosphorus": 0.042,
+            "turbidity": 6,
+            "waterLevel": 20.63,
+            "flow": 664.1,
+            "waterTemperature": 20.1
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 7.65,
+          "indicators": {
+            "ph": 7.51,
+            "codmn": 5.39,
+            "ammoniaNitrogen": 0.661,
+            "totalPhosphorus": 0.054,
+            "turbidity": 21.5,
+            "waterLevel": 18.57,
+            "flow": 606.7,
+            "waterTemperature": 21.5
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 6.12,
+          "indicators": {
+            "ph": 7.77,
+            "codmn": 2.19,
+            "ammoniaNitrogen": 0.347,
+            "totalPhosphorus": 0.072,
+            "turbidity": 10.8,
+            "waterLevel": 19.58,
+            "flow": 792.2,
+            "waterTemperature": 17.2
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 6.17,
+          "indicators": {
+            "ph": 7.68,
+            "codmn": 4.73,
+            "ammoniaNitrogen": 0.418,
+            "totalPhosphorus": 0.09,
+            "turbidity": 20,
+            "waterLevel": 19,
+            "flow": 782.5,
+            "waterTemperature": 18.9
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 5.61,
+          "indicators": {
+            "ph": 7.59,
+            "codmn": 4.71,
+            "ammoniaNitrogen": 0.278,
+            "totalPhosphorus": 0.061,
+            "turbidity": 5.9,
+            "waterLevel": 18.78,
+            "flow": 539.3,
+            "waterTemperature": 18.8
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 8.43,
+          "indicators": {
+            "ph": 7.41,
+            "codmn": 3.61,
+            "ammoniaNitrogen": 0.469,
+            "totalPhosphorus": 0.094,
+            "turbidity": 26.7,
+            "waterLevel": 20.37,
+            "flow": 610.1,
+            "waterTemperature": 19.4
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 7.66,
+          "indicators": {
+            "ph": 8.03,
+            "codmn": 3.38,
+            "ammoniaNitrogen": 0.195,
+            "totalPhosphorus": 0.048,
+            "turbidity": 20.6,
+            "waterLevel": 19,
+            "flow": 514.6,
+            "waterTemperature": 17.8
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 7.21,
+          "indicators": {
+            "ph": 7.94,
+            "codmn": 5.18,
+            "ammoniaNitrogen": 0.592,
+            "totalPhosphorus": 0.078,
+            "turbidity": 10.7,
+            "waterLevel": 19.7,
+            "flow": 476.2,
+            "waterTemperature": 21.2
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 8.23,
+          "indicators": {
+            "ph": 8.1,
+            "codmn": 2.14,
+            "ammoniaNitrogen": 0.153,
+            "totalPhosphorus": 0.078,
+            "turbidity": 17.7,
+            "waterLevel": 18.58,
+            "flow": 606.4,
+            "waterTemperature": 19.5
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 8.18,
+          "indicators": {
+            "ph": 7.97,
+            "codmn": 2.85,
+            "ammoniaNitrogen": 0.462,
+            "totalPhosphorus": 0.128,
+            "turbidity": 14.4,
+            "waterLevel": 18.3,
+            "flow": 645.5,
+            "waterTemperature": 18.2
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 5.76,
+          "indicators": {
+            "ph": 7.37,
+            "codmn": 5.17,
+            "ammoniaNitrogen": 0.703,
+            "totalPhosphorus": 0.075,
+            "turbidity": 8,
+            "waterLevel": 19.33,
+            "flow": 493,
+            "waterTemperature": 17.3
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 7.15,
+          "indicators": {
+            "ph": 7.46,
+            "codmn": 4.2,
+            "ammoniaNitrogen": 0.272,
+            "totalPhosphorus": 0.058,
+            "turbidity": 8.3,
+            "waterLevel": 19.6,
+            "flow": 433.3,
+            "waterTemperature": 17.5
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 5.82,
+          "indicators": {
+            "ph": 7.49,
+            "codmn": 4.21,
+            "ammoniaNitrogen": 0.711,
+            "totalPhosphorus": 0.057,
+            "turbidity": 14.1,
+            "waterLevel": 19.97,
+            "flow": 557.8,
+            "waterTemperature": 17.9
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 7.42,
+          "indicators": {
+            "ph": 7.21,
+            "codmn": 4.64,
+            "ammoniaNitrogen": 0.21,
+            "totalPhosphorus": 0.105,
+            "turbidity": 22.9,
+            "waterLevel": 19.88,
+            "flow": 467.6,
+            "waterTemperature": 18.6
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 8.48,
+          "indicators": {
+            "ph": 7.37,
+            "codmn": 3.5,
+            "ammoniaNitrogen": 0.526,
+            "totalPhosphorus": 0.049,
+            "turbidity": 14.7,
+            "waterLevel": 19,
+            "flow": 495.2,
+            "waterTemperature": 20
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 6.73,
+          "indicators": {
+            "ph": 7.44,
+            "codmn": 2.28,
+            "ammoniaNitrogen": 0.745,
+            "totalPhosphorus": 0.106,
+            "turbidity": 17.7,
+            "waterLevel": 18.73,
+            "flow": 556.8,
+            "waterTemperature": 17.2
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 6.15,
+          "indicators": {
+            "ph": 7.17,
+            "codmn": 2.45,
+            "ammoniaNitrogen": 0.52,
+            "totalPhosphorus": 0.054,
+            "turbidity": 23.7,
+            "waterLevel": 18.45,
+            "flow": 740.6,
+            "waterTemperature": 21.2
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 8.47,
+          "indicators": {
+            "ph": 7.87,
+            "codmn": 3.1,
+            "ammoniaNitrogen": 0.123,
+            "totalPhosphorus": 0.101,
+            "turbidity": 6.4,
+            "waterLevel": 18.38,
+            "flow": 677.2,
+            "waterTemperature": 17.1
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 6.62,
+          "indicators": {
+            "ph": 7.36,
+            "codmn": 3.49,
+            "ammoniaNitrogen": 0.182,
+            "totalPhosphorus": 0.098,
+            "turbidity": 14.3,
+            "waterLevel": 18.98,
+            "flow": 482.4,
+            "waterTemperature": 22.2
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 8.77,
+          "indicators": {
+            "ph": 8.13,
+            "codmn": 3.79,
+            "ammoniaNitrogen": 0.609,
+            "totalPhosphorus": 0.047,
+            "turbidity": 17.1,
+            "waterLevel": 18.73,
+            "flow": 766.5,
+            "waterTemperature": 21.5
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 8.78,
+          "indicators": {
+            "ph": 8.13,
+            "codmn": 3.09,
+            "ammoniaNitrogen": 0.651,
+            "totalPhosphorus": 0.099,
+            "turbidity": 18.2,
+            "waterLevel": 19.67,
+            "flow": 598.4,
+            "waterTemperature": 18.7
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 6.1,
+          "indicators": {
+            "ph": 7.73,
+            "codmn": 4.99,
+            "ammoniaNitrogen": 0.572,
+            "totalPhosphorus": 0.052,
+            "turbidity": 14.7,
+            "waterLevel": 19.48,
+            "flow": 612.9,
+            "waterTemperature": 18.9
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 7.67,
+          "indicators": {
+            "ph": 7.62,
+            "codmn": 5.23,
+            "ammoniaNitrogen": 0.474,
+            "totalPhosphorus": 0.105,
+            "turbidity": 23.1,
+            "waterLevel": 19.56,
+            "flow": 699.3,
+            "waterTemperature": 19.4
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 5.72,
+          "indicators": {
+            "ph": 7.92,
+            "codmn": 4.05,
+            "ammoniaNitrogen": 0.457,
+            "totalPhosphorus": 0.125,
+            "turbidity": 7.8,
+            "waterLevel": 18.66,
+            "flow": 634.9,
+            "waterTemperature": 19.2
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 6.52,
+          "indicators": {
+            "ph": 7.94,
+            "codmn": 3.38,
+            "ammoniaNitrogen": 0.11,
+            "totalPhosphorus": 0.109,
+            "turbidity": 15.4,
+            "waterLevel": 19.2,
+            "flow": 554.4,
+            "waterTemperature": 19.1
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 7.95,
+          "indicators": {
+            "ph": 7.61,
+            "codmn": 3.11,
+            "ammoniaNitrogen": 0.651,
+            "totalPhosphorus": 0.072,
+            "turbidity": 26.5,
+            "waterLevel": 19.54,
+            "flow": 603.6,
+            "waterTemperature": 20.8
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 8.27,
+          "indicators": {
+            "ph": 7.34,
+            "codmn": 2.21,
+            "ammoniaNitrogen": 0.51,
+            "totalPhosphorus": 0.047,
+            "turbidity": 16.8,
+            "waterLevel": 20.42,
+            "flow": 496.8,
+            "waterTemperature": 22.1
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 6.17,
+          "indicators": {
+            "ph": 7.31,
+            "codmn": 3.56,
+            "ammoniaNitrogen": 0.127,
+            "totalPhosphorus": 0.129,
+            "turbidity": 10.7,
+            "waterLevel": 18.41,
+            "flow": 642.2,
+            "waterTemperature": 17.6
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 7.16,
+          "indicators": {
+            "ph": 8,
+            "codmn": 5.24,
+            "ammoniaNitrogen": 0.795,
+            "totalPhosphorus": 0.121,
+            "turbidity": 29.2,
+            "waterLevel": 19.5,
+            "flow": 713.6,
+            "waterTemperature": 19.4
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 8.49,
+          "indicators": {
+            "ph": 7.91,
+            "codmn": 4.15,
+            "ammoniaNitrogen": 0.459,
+            "totalPhosphorus": 0.073,
+            "turbidity": 6.4,
+            "waterLevel": 18.47,
+            "flow": 544.1,
+            "waterTemperature": 17.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "ST-5101",
+      "name": "梁子湖湖心监测站",
+      "region": "梁子湖流域",
+      "river": "梁子湖",
+      "type": "水质",
+      "datasetIds": [
+        "water-quality"
+      ],
+      "readings": [
+        {
+          "day": "2026-09-26",
+          "value": 7.04,
+          "indicators": {
+            "ph": 7.16,
+            "codmn": 2.15,
+            "ammoniaNitrogen": 0.441,
+            "totalPhosphorus": 0.084,
+            "turbidity": 26.6
+          }
+        },
+        {
+          "day": "2026-09-27",
+          "value": 6.73,
+          "indicators": {
+            "ph": 8.01,
+            "codmn": 2.63,
+            "ammoniaNitrogen": 0.501,
+            "totalPhosphorus": 0.069,
+            "turbidity": 27.2
+          }
+        },
+        {
+          "day": "2026-09-28",
+          "value": 8.56,
+          "indicators": {
+            "ph": 7.68,
+            "codmn": 4,
+            "ammoniaNitrogen": 0.441,
+            "totalPhosphorus": 0.085,
+            "turbidity": 29.6
+          }
+        },
+        {
+          "day": "2026-09-29",
+          "value": 6.13,
+          "indicators": {
+            "ph": 7.47,
+            "codmn": 3.91,
+            "ammoniaNitrogen": 0.799,
+            "totalPhosphorus": 0.115,
+            "turbidity": 16.9
+          }
+        },
+        {
+          "day": "2026-09-30",
+          "value": 8.26,
+          "indicators": {
+            "ph": 8.03,
+            "codmn": 2.38,
+            "ammoniaNitrogen": 0.689,
+            "totalPhosphorus": 0.129,
+            "turbidity": 12.6
+          }
+        },
+        {
+          "day": "2026-10-01",
+          "value": 7.27,
+          "indicators": {
+            "ph": 7.95,
+            "codmn": 4.54,
+            "ammoniaNitrogen": 0.512,
+            "totalPhosphorus": 0.056,
+            "turbidity": 10.4
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "value": 7.64,
+          "indicators": {
+            "ph": 7.28,
+            "codmn": 2.35,
+            "ammoniaNitrogen": 0.225,
+            "totalPhosphorus": 0.049,
+            "turbidity": 11.3
+          }
+        },
+        {
+          "day": "2026-10-03",
+          "value": 5.71,
+          "indicators": {
+            "ph": 8.19,
+            "codmn": 4.98,
+            "ammoniaNitrogen": 0.091,
+            "totalPhosphorus": 0.029,
+            "turbidity": 12.5
+          }
+        },
+        {
+          "day": "2026-10-04",
+          "value": 6.66,
+          "indicators": {
+            "ph": 7.79,
+            "codmn": 5.12,
+            "ammoniaNitrogen": 0.175,
+            "totalPhosphorus": 0.039,
+            "turbidity": 7.6
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "value": 5.74,
+          "indicators": {
+            "ph": 8.08,
+            "codmn": 4.85,
+            "ammoniaNitrogen": 0.284,
+            "totalPhosphorus": 0.021,
+            "turbidity": 27
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "value": 8.71,
+          "indicators": {
+            "ph": 7.42,
+            "codmn": 3.4,
+            "ammoniaNitrogen": 0.373,
+            "totalPhosphorus": 0.042,
+            "turbidity": 18.1
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "value": 6.21,
+          "indicators": {
+            "ph": 7.29,
+            "codmn": 3.31,
+            "ammoniaNitrogen": 0.707,
+            "totalPhosphorus": 0.128,
+            "turbidity": 16.7
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "value": 5.79,
+          "indicators": {
+            "ph": 8.13,
+            "codmn": 4.26,
+            "ammoniaNitrogen": 0.585,
+            "totalPhosphorus": 0.096,
+            "turbidity": 28.6
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "value": 8.38,
+          "indicators": {
+            "ph": 7.42,
+            "codmn": 2.41,
+            "ammoniaNitrogen": 0.357,
+            "totalPhosphorus": 0.05,
+            "turbidity": 15.4
+          }
+        },
+        {
+          "day": "2026-10-10",
+          "value": 5.81,
+          "indicators": {
+            "ph": 7.56,
+            "codmn": 4.94,
+            "ammoniaNitrogen": 0.603,
+            "totalPhosphorus": 0.129,
+            "turbidity": 20.2
+          }
+        },
+        {
+          "day": "2026-10-11",
+          "value": 6.8,
+          "indicators": {
+            "ph": 7.77,
+            "codmn": 4.6,
+            "ammoniaNitrogen": 0.497,
+            "totalPhosphorus": 0.086,
+            "turbidity": 25.7
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "value": 5.67,
+          "indicators": {
+            "ph": 7.65,
+            "codmn": 3.74,
+            "ammoniaNitrogen": 0.26,
+            "totalPhosphorus": 0.035,
+            "turbidity": 21.3
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "value": 6.48,
+          "indicators": {
+            "ph": 8.14,
+            "codmn": 4.74,
+            "ammoniaNitrogen": 0.549,
+            "totalPhosphorus": 0.087,
+            "turbidity": 21
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "value": 8.72,
+          "indicators": {
+            "ph": 7.65,
+            "codmn": 2.63,
+            "ammoniaNitrogen": 0.339,
+            "totalPhosphorus": 0.092,
+            "turbidity": 21.3
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "value": 8.27,
+          "indicators": {
+            "ph": 8.06,
+            "codmn": 2.57,
+            "ammoniaNitrogen": 0.792,
+            "totalPhosphorus": 0.039,
+            "turbidity": 25.3
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "value": 8.26,
+          "indicators": {
+            "ph": 7.32,
+            "codmn": 3.39,
+            "ammoniaNitrogen": 0.73,
+            "totalPhosphorus": 0.113,
+            "turbidity": 19.2
+          }
+        },
+        {
+          "day": "2026-10-17",
+          "value": 7.17,
+          "indicators": {
+            "ph": 8.08,
+            "codmn": 2.35,
+            "ammoniaNitrogen": 0.724,
+            "totalPhosphorus": 0.12,
+            "turbidity": 10
+          }
+        },
+        {
+          "day": "2026-10-18",
+          "value": 7.62,
+          "indicators": {
+            "ph": 7.73,
+            "codmn": 2.99,
+            "ammoniaNitrogen": 0.416,
+            "totalPhosphorus": 0.095,
+            "turbidity": 25.3
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "value": 6.74,
+          "indicators": {
+            "ph": 7.36,
+            "codmn": 5.17,
+            "ammoniaNitrogen": 0.592,
+            "totalPhosphorus": 0.109,
+            "turbidity": 13.5
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "value": 8.32,
+          "indicators": {
+            "ph": 7.98,
+            "codmn": 5.48,
+            "ammoniaNitrogen": 0.405,
+            "totalPhosphorus": 0.117,
+            "turbidity": 7.9
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "value": 6.53,
+          "indicators": {
+            "ph": 8,
+            "codmn": 5.16,
+            "ammoniaNitrogen": 0.392,
+            "totalPhosphorus": 0.096,
+            "turbidity": 15.7
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "value": 6.12,
+          "indicators": {
+            "ph": 7.96,
+            "codmn": 4.05,
+            "ammoniaNitrogen": 0.401,
+            "totalPhosphorus": 0.075,
+            "turbidity": 20.9
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "value": 7.43,
+          "indicators": {
+            "ph": 7.28,
+            "codmn": 4.26,
+            "ammoniaNitrogen": 0.153,
+            "totalPhosphorus": 0.034,
+            "turbidity": 14.3
+          }
+        },
+        {
+          "day": "2026-10-24",
+          "value": 7.02,
+          "indicators": {
+            "ph": 7.6,
+            "codmn": 3.7,
+            "ammoniaNitrogen": 0.176,
+            "totalPhosphorus": 0.025,
+            "turbidity": 10.6
+          }
+        },
+        {
+          "day": "2026-10-25",
+          "value": 5.93,
+          "indicators": {
+            "ph": 7.55,
+            "codmn": 2.81,
+            "ammoniaNitrogen": 0.746,
+            "totalPhosphorus": 0.034,
+            "turbidity": 25.7
+          }
+        }
+      ]
+    }
+  ]
+}

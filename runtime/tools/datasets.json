@@ -1,0 +1,113 @@
+{
+  "generatedAt": "2026-10-25T00:00:00.000Z",
+  "datasets": [
+    {
+      "id": "water-quality",
+      "name": "地表水水质监测数据",
+      "description": "国家地表水监测断面逐日水质指标（pH、溶解氧、高锰酸盐指数、氨氮、总磷、浊度）。",
+      "tags": [
+        "水质",
+        "地表水",
+        "逐日"
+      ],
+      "granularity": "day",
+      "unitNote": "pH 无量纲；溶解氧 mg/L；其余 mg/L；浊度 NTU。",
+      "indicators": [
+        "ph",
+        "dissolvedOxygen",
+        "codmn",
+        "ammoniaNitrogen",
+        "totalPhosphorus",
+        "turbidity"
+      ],
+      "coverageYears": [
+        2021,
+        2026
+      ]
+    },
+    {
+      "id": "hydrology",
+      "name": "水文监测数据",
+      "description": "河道断面逐日水位、流量与水温。",
+      "tags": [
+        "水文",
+        "流量",
+        "水位"
+      ],
+      "granularity": "day",
+      "unitNote": "水位 m；流量 m³/s；水温 ℃。",
+      "indicators": [
+        "waterLevel",
+        "flow",
+        "waterTemperature"
+      ],
+      "coverageYears": [
+        2022,
+        2026
+      ]
+    },
+    {
+      "id": "algal-bloom",
+      "name": "蓝藻水华监测数据",
+      "description": "湖库叶绿素 a 与藻密度观测，用于水华预警评估。",
+      "tags": [
+        "水华",
+        "叶绿素",
+        "预警"
+      ],
+      "granularity": "week",
+      "unitNote": "叶绿素 a μg/L；藻密度 万个/L。",
+      "indicators": [
+        "chlorophyllA",
+        "algaeDensity"
+      ],
+      "coverageYears": [
+        2023,
+        2026
+      ]
+    },
+    {
+      "id": "station-meta",
+      "name": "监测站基础信息",
+      "description": "监测站编码、名称、所属流域与监测类型。",
+      "tags": [
+        "站点",
+        "基础信息"
+      ],
+      "granularity": "static",
+      "unitNote": "",
+      "indicators": [
+        "region",
+        "river",
+        "type"
+      ],
+      "coverageYears": [
+        2020,
+        2026
+      ]
+    },
+    {
+      "id": "emission-permit",
+      "name": "排污许可与排放口信息",
+      "description": "流域内重点排污单位许可排放量与排放口位置（仅授权用户可见）。",
+      "tags": [
+        "排污许可",
+        "排放口",
+        "受限"
+      ],
+      "granularity": "static",
+      "unitNote": "排放量 t/a。",
+      "indicators": [
+        "permitId",
+        "outfallLongitude",
+        "outfallLatitude",
+        "allowedDischarge"
+      ],
+      "coverageYears": [
+        2024,
+        2026
+      ],
+      "restricted": true
+    }
+  ]
+}

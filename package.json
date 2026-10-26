@@ -1,0 +1,48 @@
+{
+  "name": "agent-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Studio —— 基于 DeepSeek Harness 的受限 Agent 平台（Gateway + Vue 管理端 + Cordis 权限插件）",
+  "workspaces": [
+    "packages/*",
+    "plugins/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "build": "npm run build:shared && npm run build:plugins && npm run build:gateway && npm run build:web",
+    "build:shared": "npm run build -w @agent-studio/shared",
+    "build:plugins": "npm run build -w @agent-studio/plugin-agent-policy && npm run build -w @agent-studio/plugin-agent-tools && npm run build -w @agent-studio/plugin-agent-audit",
+    "build:gateway": "npm run build -w @agent-studio/gateway",
+    "build:web": "npm run build -w @agent-studio/web",
+    "dev": "npm run dev -w @agent-studio/gateway",
+    "dev:web": "npm run dev -w @agent-studio/web",
+    "start": "node apps/gateway/dist/server.js",
+    "typecheck": "npm run typecheck -w @agent-studio/shared && npm run typecheck -w @agent-studio/plugin-agent-policy && npm run typecheck -w @agent-studio/plugin-agent-tools && npm run typecheck -w @agent-studio/plugin-agent-audit && npm run typecheck -w @agent-studio/gateway && npm run typecheck -w @agent-studio/web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "data:demo": "node scripts/gen-demo-data.mjs",
+    "mock:llm": "node scripts/mock-llm-server.mjs",
+    "smoke": "node scripts/smoke-run.mjs --all",
+    "e2e": "node scripts/e2e-gateway.mjs --allow --approval",
+    "verify": "npm run typecheck && npm run test && npm run smoke && npm run e2e"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm-mock-server": "0.2.1-rc.3",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@deepseek-ai/dsh-subprocess-local",
+      "@google/genai",
+      "protobufjs"
+    ]
+  }
+}

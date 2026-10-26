@@ -1,0 +1,27 @@
+{
+  "name": "@agent-studio/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Studio web console (Vue 3 + Semi Design)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agent-studio/shared": "*",
+    "@aifuxi/semi-theme-default": "^2.0.0",
+    "@aifuxi/semi-ui-vue": "^2.0.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.44",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7",
+    "vue-tsc": "^2.2.12"
+  }
+}

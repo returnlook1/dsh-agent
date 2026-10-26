@@ -1,0 +1,30 @@
+{
+  "name": "@agent-studio/gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Gateway: REST + SSE API over the DSH SDK runtime",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@agent-studio/shared": "*",
+    "@deepseek-ai/dsh": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-sdk-client": "0.2.1-rc.3",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/static": "^10.0.0",
+    "fastify": "^5.12.7",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

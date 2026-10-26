@@ -1,0 +1,37 @@
+# Agent Studio 受限运行时 —— MCP 覆盖层（每个运行时单独生成）
+#
+# 该文件由 RuntimeMaterializer 生成，只包含**当前 Agent 版本被授权**的 MCP 服务器。
+# 未列出的服务器不会连接，其工具也不会出现在 Tool Registry 中。
+#
+# 每个 MCP 客户端实例是一个独立插件条目：
+#   - serverName 决定模型可见的工具名：mcp__<serverName>__<rawName>
+#   - 密钥通过 !!js process.env.X 在子进程内取值，不落盘
+#
+# 本文件是**模板**：{{...}} 由生成器替换；实际生成物见 runtime/patches/<runtimeId>/mcp.cordis.yml
+
+- insert: []
+# 生成示例（stdio）：
+#    - id: mcp-client-water
+#      name: '@deepseek-ai/dsh-mcp-client'
+#      config:
+#        transport: stdio
+#        serverName: water
+#        command: node
+#        args: ['E:/.../scripts/mcp-echo-server.mjs']
+#        env:
+#          MCP_TOKEN: !!js process.env.MCP_WATER_TOKEN
+#        cwd: '{{WORKSPACE}}'
+#        toolCallTimeoutMs: 30000
+#        failOnStartupError: false
+#
+# 生成示例（streamable-http）：
+#    - id: mcp-client-remote
+#      name: '@deepseek-ai/dsh-mcp-client'
+#      config:
+#        transport: streamable-http
+#        serverName: remote
+#        url: 'https://example.internal/mcp'
+#        headers:
+#          Authorization: !!js `Bearer ${process.env.MCP_REMOTE_TOKEN ?? ''}`
+#        toolCallTimeoutMs: 30000
+#        failOnStartupError: false

@@ -1,0 +1,27 @@
+# DSH 本地会话/记忆（每个开发者本机产生，不随代码走）
+.dsh/
+
+# 依赖与缓存
+node_modules/
+.npm-cache/
+.pnpm-home/
+.pnpm-store/
+.tmp/
+dist/
+*.tsbuildinfo
+
+# 运行时生成物
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/.auth-secret
+runtime/homes/
+runtime/workspaces/
+runtime/patches/
+runtime/policies/
+logs/
+
+# 本地环境
+.env
+.env.local
