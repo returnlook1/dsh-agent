@@ -557,7 +557,7 @@ export function parseModelCatalog(value: unknown): ModelCatalogResponse {
 
 export async function getModels(refresh = false): Promise<ModelCatalogResponse> {
   // 首次发现要起一次 DSH 探针（通常 1~2s），因此不设短超时。
-  const raw = await requestJson(`/api/models${refresh ? '?refresh=1' : ''}`)
+  const raw = await requestJson(`/models${refresh ? '?refresh=1' : ''}`)
   return parseModelCatalog(raw)
 }
 

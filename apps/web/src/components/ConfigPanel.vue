@@ -191,7 +191,11 @@ async function refreshModels(): Promise<void> {
         </div>
         <p class="field__hint">{{ config.modelSummary }}</p>
         <p v-if="config.modelsError" class="field__hint field__hint--danger">{{ config.modelsError }}</p>
-        <p v-if="!config.hasUsableModel" class="field__hint field__hint--danger">
+        <!-- 只有"清单取到了但里面没有任何模型"才提示检查凭据；请求失败时上面已经有原因 -->
+        <p
+          v-if="config.modelCatalog !== null && !config.hasUsableModel"
+          class="field__hint field__hint--danger"
+        >
           DSH 没有报告可用的 provider/model，请检查 Provider 凭据或 baseURL（服务端配置）。
         </p>
       </div>
