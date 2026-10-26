@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { McpProbeResponse, McpServerSummaryDto } from '@agent-studio/shared'
 import type { SelectModelValue, SelectOptionProps } from '@aifuxi/semi-ui-vue'
-import { Banner, Button, SideSheet, Spin, Tag } from '@aifuxi/semi-ui-vue'
+import { Banner, Button, Select, SideSheet, Spin, Tag } from '@aifuxi/semi-ui-vue'
 import { computed, ref } from 'vue'
 
 import { useConfigStore, type McpProbeState } from '@/stores/config'

@@ -18,7 +18,7 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 | 单元测试 | `npm test` | ✅ 19 文件 / **209 用例** |
 | 运行时检查（真实 DSH） | `npm run check:runtime` | ✅ **12 项断言** / 3 个场景 |
 | 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **72 项断言** / 2 个阶段 |
-| 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 149 kB，CSS gzip 79 kB） |
+| 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 147 kB，CSS gzip 82 kB） |
 | 手工演示 | `npm run demo` | ✅ 选技能 → 发消息 → 工具调用 → 回答（见 §5） |
 
 一次性全跑：`npm run verify`。

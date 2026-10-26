@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Banner, Button, Card, Input, Select, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
+import { Banner, Button, Input, Select, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
 import { computed, ref } from 'vue'
 
 import McpSelect from '@/components/McpSelect.vue'
@@ -8,8 +8,6 @@ import { useConfigStore } from '@/stores/config'
 import { useConversationStore } from '@/stores/conversation'
 import { useUiStore } from '@/stores/ui'
 import { formatDateTime } from '@/utils/format'
-
-const emit = defineEmits<{ create: [] }>()
 
 const config = useConfigStore()
 const conversation = useConversationStore()
@@ -48,7 +46,25 @@ async function refreshModels(): Promise<void> {
 </script>
 
 <template>
-  <Card class="config-card" title="项目配置">
+  <section class="config-panel">
+    <header class="panel__head">
+      <div>
+        <p class="panel__eyebrow">capabilities</p>
+        <h2 class="panel__title">能力配置</h2>
+      </div>
+      <div class="panel__actions">
+        <Button
+          v-if="config.projectConfig !== null"
+          size="small"
+          theme="borderless"
+          :disabled="config.configLoading"
+          :loading="config.saving"
+          @click="save"
+        >
+          保存
+        </Button>
+      </div>
+    </header>
     <div class="config-body">
       <Banner
         v-if="config.configError"
@@ -224,23 +240,20 @@ async function refreshModels(): Promise<void> {
       </div>
 
       <div class="config-actions">
-        <Button block :loading="config.saving" :disabled="config.configLoading" @click="save">
-          保存为项目默认
-        </Button>
         <Button
           block
           type="primary"
-          :loading="conversation.creating"
-          :disabled="config.projectId.trim().length === 0 || !config.hasUsableModel"
-          @click="emit('create')"
+          :loading="config.saving"
+          :disabled="config.configLoading"
+          @click="save"
         >
-          新建对话
+          保存为项目默认
         </Button>
       </div>
 
       <Typography.Text type="tertiary" size="small" class="config-note">
-        新建对话会带上左侧当前选择（不继承项目默认，避免取消勾选的技能被并集加回）。
+        保存后成为该项目的默认能力；新建对话使用当前选择（不继承项目默认，避免取消勾选的技能被并集加回）。
       </Typography.Text>
     </div>
-  </Card>
+  </section>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CreateConversationRequest } from '@agent-studio/shared'
-import { Button, LayoutContent, LayoutHeader, Layout, Modal } from '@aifuxi/semi-ui-vue'
+import { Button, Modal } from '@aifuxi/semi-ui-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -28,6 +28,10 @@ const ui = useUiStore()
 const pendingAction = ref<PendingAction>(null)
 const switchConfirmVisible = computed(() => pendingAction.value !== null)
 
+/** 三栏面板：窄屏默认收起右栏，小屏再收起左栏（可用顶栏按钮切换）。 */
+const railOpen = ref(window.innerWidth >= 1024)
+const inspectorOpen = ref(window.innerWidth >= 1280)
+
 const healthTone = computed<StatusTone>(() => {
   if (ui.health === 'online') return 'online'
   if (ui.health === 'checking') return 'checking'
@@ -51,6 +55,31 @@ const healthHint = computed(() => {
   }
   if (ui.health === 'checking') return '正在检查 GET /api/health'
   return 'GET /api/health 不可用：可继续查看页面，但请求可能失败。'
+})
+
+/** 顶栏的项目 / 路由摘要：只做展示，真正编辑在右栏。 */
+const projectLabel = computed(() => {
+  const id = conversation.current?.projectId ?? config.projectId
+  return id.trim().length > 0 ? id : '未选择'
+})
+
+const routeProvider = computed(() => {
+  const snapshot = conversation.current?.config
+  if (snapshot !== undefined && snapshot.provider.length > 0) return snapshot.provider
+  return config.dshRoute.provider.length > 0 ? config.dshRoute.provider : 'route'
+})
+
+const routeModel = computed(() => {
+  const snapshot = conversation.current?.config
+  if (snapshot !== undefined && snapshot.model.length > 0) return snapshot.model
+  return config.dshRoute.model.length > 0 ? config.dshRoute.model : '等待 DSH 清单'
+})
+
+const routeTitle = computed(() => {
+  const catalog = config.modelCatalog
+  if (catalog === null) return '模型清单尚未加载'
+  const source = catalog.defaultSource === 'dsh-default-model' ? 'DSH 默认模型' : 'DSH 清单第一项'
+  return `路由由 DSH 提供（${source}）· 来源 ${catalog.source}`
 })
 
 watch(
@@ -91,7 +120,7 @@ function openConversation(conversationId: string): void {
   void router.push({ name: 'conversation', params: { conversationId } }).catch(() => undefined)
 }
 
-/** 历史列表跟随当前对话所属项目；没有对话时用左栏项目 ID。 */
+/** 历史列表跟随当前对话所属项目；没有对话时用右栏项目 ID。 */
 function historyProjectId(): string {
   return conversation.current?.projectId ?? config.projectId
 }
@@ -131,11 +160,13 @@ function goHomeNow(): void {
 async function createNow(): Promise<void> {
   const projectId = config.projectId.trim()
   if (projectId.length === 0) {
-    ui.notifyError('请先填写项目 ID')
+    ui.notifyError('请先在右侧填写项目 ID')
+    inspectorOpen.value = true
     return
   }
   if (!config.hasUsableModel) {
     ui.notifyError('DSH 没有报告可用的模型，无法新建对话')
+    inspectorOpen.value = true
     return
   }
   // 候选项来自 DSH；不选则由服务端用 DSH 默认路由（agent-default-model）。
@@ -148,7 +179,7 @@ async function createNow(): Promise<void> {
     mcpServers: [...config.selectedMcpServers],
     ...(provider.length === 0 || model.length === 0 ? {} : { provider, model }),
     systemPrompt: config.systemPrompt,
-    // 左侧表单已经是完整选择；不继承项目默认，避免"取消勾选的技能被并集加回"。
+    // 右栏表单已经是完整选择；不继承项目默认，避免"取消勾选的技能被并集加回"。
     inheritProjectConfig: false,
   }
 
@@ -192,42 +223,113 @@ function refreshHistory(): void {
 </script>
 
 <template>
-  <Layout class="playground">
-    <LayoutHeader class="playground__header">
+  <div class="app-shell">
+    <header class="topbar">
       <button type="button" class="brand" @click="requestHome">
-        <span class="brand__mark" aria-hidden="true">AP</span>
+        <span class="brand__mark" aria-hidden="true">DS</span>
         <span class="brand__text">
           <span class="brand__name">Agent Playground</span>
-          <span class="brand__sub">DSH Agent Service · 本地能力测试台</span>
+          <span class="brand__sub">DSH · Restricted Agent Service</span>
         </span>
       </button>
 
-      <div class="playground__header-right">
+      <div class="topbar__group">
+        <span class="chip chip--project" :title="`项目 ${projectLabel}`">
+          <span class="chip__kicker">project</span>
+          <span class="chip__value">{{ projectLabel }}</span>
+        </span>
+        <span class="chip chip--route" :title="routeTitle">
+          <span class="chip__dot" aria-hidden="true" />
+          <span class="chip__kicker">{{ routeProvider }}</span>
+          <span class="chip__value">{{ routeModel }}</span>
+        </span>
+      </div>
+
+      <div class="topbar__spacer" />
+
+      <div class="topbar__group">
         <StatusBadge :tone="healthTone" :label="healthLabel" :hint="healthHint" />
         <Button v-if="ui.health === 'offline'" size="small" theme="borderless" @click="ui.checkHealth()">
           重试
         </Button>
+        <button
+          type="button"
+          class="panel-toggle"
+          :class="{ 'is-active': railOpen }"
+          title="会话栏"
+          aria-label="切换会话栏"
+          @click="railOpen = !railOpen"
+        >
+          ☰
+        </button>
+        <button
+          type="button"
+          class="panel-toggle"
+          :class="{ 'is-active': inspectorOpen }"
+          title="能力配置"
+          aria-label="切换能力配置面板"
+          @click="inspectorOpen = !inspectorOpen"
+        >
+          ⚙
+        </button>
       </div>
-    </LayoutHeader>
+    </header>
 
-    <LayoutContent class="playground__body">
-      <aside class="playground__aside">
-        <ConfigPanel @create="requestCreate" />
-        <ConversationMeta />
+    <div
+      class="workspace"
+      :class="{ 'is-rail-closed': !railOpen, 'is-inspector-closed': !inspectorOpen }"
+    >
+      <aside class="rail panel">
+        <div class="panel__head">
+          <div>
+            <p class="panel__eyebrow">sessions</p>
+            <h2 class="panel__title">会话</h2>
+          </div>
+          <div class="panel__actions">
+            <Button
+              size="small"
+              theme="borderless"
+              :loading="conversation.historyLoading"
+              @click="refreshHistory"
+            >
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="rail__create"
+          :disabled="conversation.creating || !config.hasUsableModel"
+          :title="conversation.creating ? '正在创建…' : '按右侧当前选择创建对话'"
+          @click="requestCreate"
+        >
+          <span>{{ conversation.creating ? '创建中…' : '新建对话' }}</span>
+          <span class="rail__create-plus" aria-hidden="true">＋</span>
+        </button>
+        <p class="rail__create-hint">使用右侧当前选择（Skills / MCP / 模型）</p>
+
         <ConversationList
           :items="conversation.history"
           :active-id="conversation.current?.id ?? null"
           :loading="conversation.historyLoading"
           :error="conversation.historyError"
           @select="requestSwitch"
-          @refresh="refreshHistory"        />
+          @refresh="refreshHistory"
+        />
+
+        <ConversationMeta />
       </aside>
 
-      <div class="playground__main">
-        <ChatPanel />
-      </div>
-    </LayoutContent>
-  </Layout>
+      <main class="stage panel">
+        <ChatPanel @create="requestCreate" />
+      </main>
+
+      <aside class="inspector panel">
+        <ConfigPanel />
+      </aside>
+    </div>
+  </div>
 
   <Modal
     :visible="switchConfirmVisible"

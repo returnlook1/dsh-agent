@@ -7,6 +7,9 @@ import { createApp } from 'vue'
 import App from '@/App.vue'
 import { router } from '@/router'
 
+// 深海观测台主题：Semi 的暗色 token + global.css 里的自定义调色板。
+document.body.setAttribute('theme-mode', 'dark')
+
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)

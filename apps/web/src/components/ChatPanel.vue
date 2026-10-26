@@ -2,12 +2,10 @@
 import {
   Banner,
   Button,
-  Empty,
   Input,
   Modal,
   Popconfirm,
   Spin,
-  Tag,
   TextArea,
   Typography,
 } from '@aifuxi/semi-ui-vue'
@@ -15,10 +13,16 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import MessageBubble from '@/components/MessageBubble.vue'
+import { useConfigStore } from '@/stores/config'
 import { useConversationStore } from '@/stores/conversation'
 import { useUiStore } from '@/stores/ui'
 
 const conversation = useConversationStore()
+const config = useConfigStore()
+
+const emit = defineEmits<{
+  create: []
+}>()
 const ui = useUiStore()
 const router = useRouter()
 
@@ -47,7 +51,7 @@ const title = computed(() => {
   return raw.length > 0 ? raw : '新对话'
 })
 const subtitle = computed(() => {
-  if (current.value === null) return '左侧选好能力后新建对话，再发送第一条消息'
+  if (current.value === null) return '选好能力后新建对话，再发送第一条消息'
   return `项目 ${current.value.projectId} · ${current.value.messageCount} 条消息`
 })
 const modelLabel = computed(() => {
@@ -194,15 +198,20 @@ async function removeCurrent(): Promise<void> {
   <section class="chat-panel">
     <header class="chat-panel__head">
       <div class="chat-panel__identity">
-        <Typography.Title :heading="5" class="chat-panel__title">{{ title }}</Typography.Title>
-        <p class="chat-panel__sub">{{ subtitle }}</p>
+        <p class="panel__eyebrow">session</p>
+        <div class="chat-panel__titleline">
+          <Typography.Title :heading="5" class="chat-panel__title">{{ title }}</Typography.Title>
+          <span v-if="conversation.streaming" class="chat-panel__running">
+            <Spin size="small" />
+            <span>运行中</span>
+          </span>
+        </div>
+        <p class="chat-panel__sub">
+          <span>{{ subtitle }}</span>
+          <span v-if="modelLabel.length > 0" class="chat-panel__route">{{ modelLabel }}</span>
+        </p>
       </div>
-      <div class="chat-panel__meta">
-        <Tag v-if="modelLabel.length > 0" size="small" type="light" color="grey">{{ modelLabel }}</Tag>
-        <span v-if="conversation.streaming" class="chat-panel__running">
-          <Spin size="small" />
-          <span>运行中</span>
-        </span>
+      <div class="chat-panel__actions">
         <Button
           v-if="isRunning"
           size="small"
@@ -299,18 +308,36 @@ async function removeCurrent(): Promise<void> {
           </div>
         </template>
 
-        <Empty
-          v-else-if="current === null"
-          class="chat-empty"
-          title="还没有进行中的对话"
-          description="左侧选好能力后点『新建对话』，这里会显示消息与工具调用。"
-        >
-          <div class="chat-empty__hints">
-            <p>· 配置 Skills / MCP / 模型后点「新建对话」</p>
-            <p>· 发送消息后按事件即时渲染助手文本与工具卡片</p>
-            <p>· 刷新页面会回放历史消息和工具调用</p>
+        <div v-else-if="current === null" class="pad-empty">
+          <p class="pad-empty__eyebrow">ready to launch</p>
+          <h2 class="pad-empty__title">开始一次受限对话</h2>
+          <p class="pad-empty__desc">
+            Agent Service 只负责项目、Skill、MCP 与会话；模型与凭据由 DSH 统一提供。
+            在右栏确认能力后新建对话，发送第一条消息即可观察工具调用与结果。
+          </p>
+          <div class="pad-empty__stats">
+            <div class="stat">
+              <p class="stat__k">project</p>
+              <p class="stat__v">{{ config.projectId.trim() || '未选择' }}</p>
+            </div>
+            <div class="stat">
+              <p class="stat__k">capabilities</p>
+              <p class="stat__v stat__v--accent">
+                {{ config.selectedSkills.length }} skills · {{ config.selectedMcpServers.length }} mcp
+              </p>
+            </div>
+            <div class="stat">
+              <p class="stat__k">route</p>
+              <p class="stat__v" :title="`${config.provider} / ${config.model}`">{{ config.provider || '—' }} / {{ config.model || '—' }}</p>
+            </div>
           </div>
-        </Empty>
+          <div class="pad-empty__actions">
+            <Button type="primary" theme="solid" :disabled="!config.hasUsableModel" @click="emit('create')">
+              新建对话
+            </Button>
+            <span class="pad-empty__hint">与左栏「新建对话」等价；创建后这里显示消息流。</span>
+          </div>
+        </div>
 
         <div v-else class="chat-welcome">
           <h2>对话已创建</h2>
@@ -332,10 +359,10 @@ async function removeCurrent(): Promise<void> {
           :disabled="current === null || conversation.streaming"
           :placeholder="
             current === null
-              ? '先在左侧新建对话'
+              ? '先新建一个对话'
               : conversation.streaming
                 ? '本轮运行中，结束后可继续输入'
-                : '输入消息，Enter 发送，Shift + Enter 换行'
+                : '写下你的问题，或描述要分析的数据…'
           "
           @keydown="onKeydown"
         />
@@ -347,6 +374,7 @@ async function removeCurrent(): Promise<void> {
           </span>
           <Button
             type="primary"
+            theme="solid"
             :loading="conversation.streaming"
             :disabled="!canSubmit"
             @click="submit"

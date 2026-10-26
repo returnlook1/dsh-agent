@@ -38,7 +38,7 @@ async function refresh(): Promise<void> {
 </script>
 
 <template>
-  <section class="side-card">
+  <section class="side-card meta-card">
     <header class="side-card__head">
       <div class="side-card__title">当前对话</div>
       <Button
