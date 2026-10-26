@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Agent Gateway: REST + SSE API over the DSH SDK runtime",
+  "description": "DSH Agent Service: thin REST + SSE API over a configurable DSH runtime pool",
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

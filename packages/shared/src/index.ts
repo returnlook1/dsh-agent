@@ -1,15 +1,15 @@
 /**
- * Agent Studio 共享契约。
+ * DSH Agent Service —— 共享契约。
  *
- * 三个消费者共用这里的类型：
- * - `apps/gateway`：HTTP/SSE 服务、运行时管理、审计；
- * - `apps/web`：Vue3 管理端与聊天端；
- * - `plugins/*`：运行在 DSH 子进程内的 Cordis 插件（只依赖其中的
- *   policy / audit 两个模块，且以 type-only 方式导入）。
+ * 只描述"服务 ↔ 前端/业务后端"之间的形状：
+ * - 能力配置（Skills / MCP / 模型）与两级继承（项目 → 对话）
+ * - 对话、消息与 SSE 事件
+ *
+ * 这里**不包含** Agent 版本、发布、用户、角色、审批、审计——这些由业务后端负责，
+ * 服务本身不做租户与权限管理（见 docs/SERVICE.md §1）。
  */
 export * from './agent-config.js'
+export * from './conversation.js'
 export * from './events.js'
-export * from './policy.js'
-export * from './audit.js'
-export * from './dto.js'
-export * from './catalog.js'
+export * from './inventory.js'
+export * from './messages.js'

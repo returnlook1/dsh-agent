@@ -1,227 +1,205 @@
 <script setup lang="ts">
-import type { AgentSummary } from '@agent-studio/shared'
-import { Banner, Button, Spin, TextArea } from '@aifuxi/semi-ui-vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import { Banner, Button, Empty, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
-import ApprovalDialog from '@/components/ApprovalDialog.vue'
-import ToolCallCard from '@/components/ToolCallCard.vue'
-import { notifyError, notifyInfo } from '@/services/feedback'
-import { useChatStore, type ApprovalChoice, type ChatMessage } from '@/stores/chat'
-import { formatClock } from '@/utils/format'
-import { IconSend, IconStop } from '@/ui/icons'
+import MessageBubble from '@/components/MessageBubble.vue'
+import { useConversationStore } from '@/stores/conversation'
 
-const props = withDefaults(
-  defineProps<{
-    agent: AgentSummary | null
-    welcome?: string
-    modelLabel?: string
-    showToolCalls?: boolean
-  }>(),
-  { welcome: '', modelLabel: '', showToolCalls: true },
-)
+const conversation = useConversationStore()
 
-const chat = useChatStore()
 const draft = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
-const canSend = computed(
-  () => draft.value.trim().length > 0 && !chat.streaming && props.agent !== null,
+const current = computed(() => conversation.current)
+const canSubmit = computed(
+  () => current.value !== null && !conversation.streaming && draft.value.trim().length > 0,
 )
-
-const showWelcome = computed(() => chat.messages.length === 0 && !chat.messagesLoading)
-
-const welcomeText = computed(() =>
-  props.welcome.trim().length > 0
-    ? props.welcome
-    : '输入你的问题。助手只会在被授权的工具范围内查询数据，遇到需要确认的操作会先弹出审批。',
-)
-
-function roleLabel(role: ChatMessage['role']): string {
-  switch (role) {
-    case 'user':
-      return '我'
-    case 'assistant':
-      return '助手'
-    case 'system':
-      return '系统'
-    default:
-      return '工具'
-  }
-}
+const title = computed(() => {
+  if (current.value === null) return '对话测试'
+  const raw = current.value.title.trim()
+  return raw.length > 0 ? raw : '新对话'
+})
+const subtitle = computed(() => {
+  if (current.value === null) return '左侧选好能力后新建对话，再发送第一条消息'
+  return `项目 ${current.value.projectId} · ${current.value.messageCount} 条消息`
+})
+const modelLabel = computed(() => {
+  const config = current.value?.config
+  return config === undefined ? '' : `${config.provider} / ${config.model}`
+})
 
 async function scrollToBottom(): Promise<void> {
   await nextTick()
   const element = scroller.value
-  if (element === null) return
-  element.scrollTop = element.scrollHeight
+  if (element !== null) element.scrollTop = element.scrollHeight
 }
 
 watch(
-  () => chat.activitySignal,
+  () => conversation.activityTick,
   () => {
     void scrollToBottom()
   },
 )
 watch(
-  () => chat.messagesLoading,
+  () => conversation.messagesLoading,
   (loading) => {
     if (!loading) void scrollToBottom()
   },
 )
+watch(
+  () => conversation.current?.id,
+  () => {
+    void scrollToBottom()
+  },
+)
+
+onMounted(() => {
+  void scrollToBottom()
+})
 
 async function submit(): Promise<void> {
-  if (!canSend.value) return
+  if (!canSubmit.value) return
   const content = draft.value
   draft.value = ''
-  try {
-    await chat.send(content)
-  } catch (error) {
-    notifyError(error)
+  const result = await conversation.send(content)
+  if (!result.ok && result.aborted !== true) {
+    // 失败时把草稿还原，避免用户重新输入。
     draft.value = content
   }
 }
 
-function handleKeydown(event: KeyboardEvent): void {
+function onKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
   void submit()
 }
 
-async function stop(): Promise<void> {
-  await chat.stop()
-  notifyInfo('已停止本轮运行')
+function refresh(): void {
+  void conversation.reloadConversation()
+  void conversation.loadHistory(conversation.current?.projectId)
 }
 
-async function decide(choice: ApprovalChoice): Promise<void> {
-  try {
-    await chat.decideApproval(choice)
-  } catch (error) {
-    notifyError(error)
-  }
-}
-
-function expireApproval(): void {
-  chat.expireApproval()
-  notifyInfo('审批已超时，本次工具调用被拒绝')
+function clearError(): void {
+  conversation.clearError()
 }
 </script>
 
 <template>
   <section class="chat-panel">
-    <header class="chat-panel__header">
+    <header class="chat-panel__head">
       <div class="chat-panel__identity">
-        <h2 class="chat-panel__name">{{ agent?.name ?? '未选择智能体' }}</h2>
-        <p class="chat-panel__sub">
-          <span v-if="agent">{{ agent.description || '受限智能体' }}</span>
-          <span v-else>请先在左侧选择已发布的智能体</span>
-        </p>
+        <Typography.Title :heading="5" class="chat-panel__title">{{ title }}</Typography.Title>
+        <p class="chat-panel__sub">{{ subtitle }}</p>
       </div>
       <div class="chat-panel__meta">
-        <span v-if="modelLabel" class="chat-panel__model">{{ modelLabel }}</span>
-        <span v-if="chat.streaming" class="chat-panel__running">
-          <span class="dot dot--pulse" aria-hidden="true" />
-          运行中
+        <Tag v-if="modelLabel.length > 0" size="small" type="light" color="grey">{{ modelLabel }}</Tag>
+        <span v-if="conversation.streaming" class="chat-panel__running">
+          <Spin size="small" />
+          <span>运行中</span>
         </span>
+        <Button
+          v-if="current !== null"
+          size="small"
+          theme="borderless"
+          :disabled="conversation.streaming"
+          @click="refresh"
+        >
+          刷新
+        </Button>
       </div>
     </header>
 
     <div ref="scroller" class="chat-scroll">
       <div class="chat-column">
         <Banner
-          v-if="chat.error"
+          v-if="conversation.error"
           type="danger"
-          :title="'本轮运行未完成'"
-          class="chat-error"
-          @close="chat.clearError()"
+          :title="conversation.errorCode ? `本轮未完成 · ${conversation.errorCode}` : '本轮未完成'"
+          @close="clearError"
         >
-          <template #description>{{ chat.error }}</template>
+          <template #description>{{ conversation.error }}</template>
         </Banner>
 
-        <div v-if="chat.messagesLoading" class="chat-loading">
+        <Banner
+          v-if="conversation.truncated"
+          type="warning"
+          title="历史记录可能不完整"
+          description="服务端在运行时崩溃等情况下可能截断消息记录，已展示的部分仍可回放。"
+        />
+
+        <div v-if="conversation.messagesLoading" class="chat-loading">
           <Spin size="middle" />
+          <span>正在加载对话历史…</span>
         </div>
 
-        <div v-else-if="showWelcome" class="chat-welcome">
-          <div class="chat-welcome__mark" aria-hidden="true">AS</div>
-          <h3 class="chat-welcome__title">{{ welcomeText }}</h3>
-          <ul class="chat-welcome__points">
-            <li>工具调用、审批与结果都会写入审计日志。</li>
-            <li>需要确认的操作会暂停并等待你的授权。</li>
-            <li>出网范围由 Agent 的出网策略与 MCP 白名单共同决定。</li>
-          </ul>
-        </div>
-
-        <div v-else class="chat-messages">
-          <article
-            v-for="message in chat.messages"
+        <template v-else-if="conversation.messages.length > 0">
+          <MessageBubble
+            v-for="message in conversation.messages"
             :key="message.id"
-            class="msg"
-            :class="[`msg--${message.role}`, { 'msg--failed': message.failed === true }]"
-          >
-            <div class="msg__meta">
-              <span class="msg__role">{{ roleLabel(message.role) }}</span>
-              <span class="msg__time">{{ formatClock(message.createdAt) }}</span>
-            </div>
-            <div class="msg__body">
-              <div v-if="message.toolCalls.length > 0 && props.showToolCalls" class="msg__tools">
-                <ToolCallCard v-for="call in message.toolCalls" :key="call.callId" :call="call" />
-              </div>
-              <p
-                v-else-if="message.toolCalls.length > 0 && !message.content"
-                class="msg__thinking"
-              >
-                正在调用工具…
-              </p>
-              <p v-if="message.content.length > 0" class="msg__text">{{ message.content }}</p>
-              <p v-else-if="message.streaming === true" class="msg__thinking">正在检索并组织回答…</p>
-              <span v-if="message.streaming === true" class="msg__caret" aria-hidden="true" />
-            </div>
-          </article>
+            :message="message"
+          />
+          <div v-if="conversation.streaming" class="chat-running">
+            <Spin size="small" />
+            <span>助手正在处理本轮，事件到达后即时更新…</span>
+          </div>
+        </template>
+
+        <Empty
+          v-else-if="current === null"
+          class="chat-empty"
+          title="还没有进行中的对话"
+          description="左侧选好能力后点『新建对话』，这里会显示消息与工具调用。"
+        >
+          <div class="chat-empty__hints">
+            <p>· 配置 Skills / MCP / 模型后点「新建对话」</p>
+            <p>· 发送消息后按事件即时渲染助手文本与工具卡片</p>
+            <p>· 刷新页面会回放历史消息和工具调用</p>
+          </div>
+        </Empty>
+
+        <div v-else class="chat-welcome">
+          <h2>对话已创建</h2>
+          <p>
+            发送第一条消息开始测试。助手会在同一轮里按需调用你启用的 Skills 与 MCP
+            服务器；工具调用会以卡片形式出现在助手消息下方。
+          </p>
         </div>
       </div>
     </div>
 
-    <div class="chat-composer">
+    <footer class="chat-composer">
       <div class="chat-composer__inner">
         <TextArea
           v-model="draft"
-          class="chat-composer__input"
-          placeholder="请输入需要查询的问题，Enter 发送，Shift + Enter 换行"
-          :autosize="{ minRows: 1, maxRows: 6 }"
-          :disabled="chat.streaming"
-          :max-length="4000"
-          @keydown="handleKeydown"
+          :rows="3"
+          resize="none"
+          :max-length="100000"
+          :disabled="current === null || conversation.streaming"
+          :placeholder="
+            current === null
+              ? '先在左侧新建对话'
+              : conversation.streaming
+                ? '本轮运行中，结束后可继续输入'
+                : '输入消息，Enter 发送，Shift + Enter 换行'
+          "
+          @keydown="onKeydown"
         />
         <div class="chat-composer__actions">
-          <span class="chat-composer__hint">所有工具调用均受策略与审计约束</span>
+          <span class="chat-composer__hint">
+            <template v-if="current === null">尚未选中对话</template>
+            <template v-else-if="conversation.streaming">本轮运行中，发送按钮已禁用</template>
+            <template v-else>Enter 发送 · Shift + Enter 换行</template>
+          </span>
           <Button
-            v-if="chat.streaming"
-            type="danger"
-            theme="light"
-            @click="stop"
-          >
-            <template #icon><IconStop /></template>
-            停止
-          </Button>
-          <Button
-            v-else
             type="primary"
-            theme="solid"
-            :disabled="!canSend"
+            :loading="conversation.streaming"
+            :disabled="!canSubmit"
             @click="submit"
           >
-            <template #icon><IconSend /></template>
             发送
           </Button>
         </div>
       </div>
-    </div>
-
-    <ApprovalDialog
-      :prompt="chat.pendingApproval"
-      :submitting="chat.decidingApproval"
-      @decide="decide"
-      @expire="expireApproval"
-    />
+    </footer>
   </section>
 </template>

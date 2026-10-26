@@ -29,7 +29,7 @@ export const meta: BusinessToolMeta = {
   title: '导出报表',
   description:
     '为某个监测站生成报表导出任务（不执行真实渲染）。stationId 为站点标识，format 必须是 pdf 或 xlsx。' +
-    '该工具属于高风险操作，需要人工审批后才允许执行；站点同样必须在授权范围内。',
+    '该工具属于高风险操作（会生成文件）；站点必须位于授权范围内。是否需要人工确认由调用方（业务端口）决定。',
   risk: 'high',
   defaultAction: 'ask',
   requiresApprovalChannel: true,

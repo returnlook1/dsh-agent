@@ -1,19 +1,33 @@
-/** 健康检查（公开，不泄露任何凭据或配置细节）。 */
+/** GET /api/health（公开）与 GET /api/runtimes（运行时排障视图）。 */
 import type { FastifyInstance } from 'fastify'
-import type { HealthResponse } from '@agent-studio/shared'
+import type { RuntimeInfo } from '@agent-studio/shared'
 import type { AppContext } from '../context.js'
 
+/** 服务版本（与 apps/gateway/package.json 对齐；不读文件，避免 dist 布局差异）。 */
+export const SERVICE_VERSION = '2.0.0'
+
+export interface HealthResponse {
+  ok: boolean
+  version: string
+  dshVersion: string
+  runtimes: number
+  uptimeSec: number
+}
+
+export interface RuntimeListResponse {
+  runtimes: RuntimeInfo[]
+}
+
 export function registerHealthRoutes(app: FastifyInstance, ctx: AppContext): void {
-  app.get('/api/health', async (_request, reply) => {
-    const databaseOk = ctx.db.ping()
-    const response: HealthResponse = {
-      ok: databaseOk,
-      version: '1.0.0',
-      dshVersion: ctx.config.dshVersion,
-      database: databaseOk ? 'ok' : 'error',
-      runtimes: ctx.runtime.status().length,
-      uptimeSec: Math.max(0, Math.floor((Date.now() - ctx.startedAt) / 1000)),
-    }
-    reply.status(databaseOk ? 200 : 503).send(response)
-  })
+  app.get('/api/health', async (): Promise<HealthResponse> => ({
+    ok: true,
+    version: SERVICE_VERSION,
+    dshVersion: ctx.config.dshVersion,
+    runtimes: ctx.pool.status().length,
+    uptimeSec: Math.max(0, Math.floor((Date.now() - ctx.startedAt) / 1000)),
+  }))
+
+  app.get('/api/runtimes', async (): Promise<RuntimeListResponse> => ({
+    runtimes: ctx.pool.status(),
+  }))
 }

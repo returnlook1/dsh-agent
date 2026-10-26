@@ -1,75 +1,37 @@
 <script setup lang="ts">
+import type { ToolCallRecord } from '@agent-studio/shared'
 import { Tag } from '@aifuxi/semi-ui-vue'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
-import type { ChatToolCall } from '@/stores/chat'
 import { formatDuration } from '@/utils/format'
-import { toneFor } from '@/utils/labels'
-import { IconChevronRight, IconTool } from '@/ui/icons'
 
-const props = defineProps<{ call: ChatToolCall }>()
+const props = defineProps<{ call: ToolCallRecord }>()
 
-const expanded = ref(props.call.status === 'failed' || props.call.status === 'denied')
-
-watch(
-  () => props.call.status,
-  (status) => {
-    if (status === 'failed' || status === 'denied') expanded.value = true
-  },
-)
-
-const statusMeta = computed(() => {
+const meta = computed<{ label: string; color: 'blue' | 'green' | 'red' }>(() => {
   switch (props.call.status) {
     case 'running':
-      return { label: '执行中', tone: 'running' as const }
+      return { label: '运行中', color: 'blue' }
     case 'succeeded':
-      return { label: '成功', tone: 'success' as const }
+      return { label: '成功', color: 'green' }
     case 'failed':
-      return { label: '失败', tone: 'failed' as const }
-    case 'denied':
-      return { label: '已拒绝', tone: 'denied' as const }
+      return { label: '失败', color: 'red' }
     default:
-      return { label: '未知', tone: 'denied' as const }
+      return { label: props.call.status, color: 'red' }
   }
 })
-
-const riskTone = computed(() => (props.call.risk === undefined ? null : toneFor('risk', props.call.risk)))
-const hasDetail = computed(
-  () => (props.call.argumentsPreview ?? '').length > 0 || (props.call.error ?? '').length > 0,
-)
 </script>
 
 <template>
-  <div class="tool-card" :class="`tool-card--${statusMeta.tone}`">
-    <button
-      type="button"
-      class="tool-card__head"
-      :aria-expanded="expanded"
-      :disabled="!hasDetail"
-      @click="expanded = !expanded"
-    >
-      <span class="tool-card__icon" aria-hidden="true"><IconTool /></span>
-      <span class="tool-card__name">{{ call.tool }}</span>
-      <span class="tool-card__status">
-        <span class="dot" aria-hidden="true" />
-        {{ statusMeta.label }}
+  <div class="tool-call" :class="`tool-call--${call.status}`">
+    <div class="tool-call__head">
+      <span class="tool-call__icon" aria-hidden="true">⚙</span>
+      <span class="tool-call__name">{{ call.tool }}</span>
+      <Tag size="small" type="light" :color="meta.color">{{ meta.label }}</Tag>
+      <span v-if="call.durationMs !== undefined" class="tool-call__duration">
+        {{ formatDuration(call.durationMs) }}
       </span>
-      <Tag v-if="riskTone" :color="riskTone.color" type="light" size="small">{{ riskTone.label }}</Tag>
-      <span v-if="call.durationMs !== undefined" class="tool-card__duration">{{ formatDuration(call.durationMs) }}</span>
-      <span v-if="hasDetail" class="tool-card__chevron" :class="{ 'is-open': expanded }" aria-hidden="true">
-        <IconChevronRight />
-      </span>
-    </button>
-
-    <div v-if="expanded" class="tool-card__body">
-      <div v-if="call.argumentsPreview" class="tool-card__block">
-        <span class="tool-card__label">参数摘要</span>
-        <pre class="tool-card__code">{{ call.argumentsPreview }}</pre>
-      </div>
-      <div v-if="call.error" class="tool-card__block">
-        <span class="tool-card__label">错误</span>
-        <p class="tool-card__error">{{ call.error }}</p>
-      </div>
     </div>
+    <pre v-if="call.argumentsPreview" class="tool-call__args" :title="call.argumentsPreview">{{ call.argumentsPreview }}</pre>
+    <p v-if="call.error" class="tool-call__error">{{ call.error }}</p>
   </div>
 </template>

@@ -1,92 +1,29 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
 
-import AppLayout from '@/layouts/AppLayout.vue'
-import { useAuthStore } from '@/stores/auth'
-
-declare module 'vue-router' {
-  interface RouteMeta {
-    title?: string
-    /** 无需登录即可访问。 */
-    public?: boolean
-    /** 仅管理员可访问。 */
-    adminOnly?: boolean
-    /** 内容区使用整屏布局（聊天）。 */
-    focused?: boolean
-  }
-}
+import PlaygroundPage from '@/pages/PlaygroundPage.vue'
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'login',
-    component: () => import('@/pages/login/LoginPage.vue'),
-    meta: { title: '登录', public: true },
+    path: '/',
+    name: 'playground',
+    component: PlaygroundPage,
+    meta: { title: 'Agent Playground' },
   },
   {
-    path: '/',
-    component: AppLayout,
-    children: [
-      { path: '', redirect: { name: 'agents' } },
-      {
-        path: 'agents',
-        name: 'agents',
-        component: () => import('@/pages/agents/AgentsPage.vue'),
-        meta: { title: 'Agent 管理' },
-      },
-      {
-        path: 'agents/:id/edit',
-        name: 'agent-editor',
-        component: () => import('@/pages/agent-editor/AgentEditorPage.vue'),
-        meta: { title: 'Agent 编辑器' },
-      },
-      {
-        path: 'chat/:agentId?',
-        name: 'chat',
-        component: () => import('@/pages/chat/ChatPage.vue'),
-        meta: { title: '聊天', focused: true },
-      },
-      {
-        path: 'mcp',
-        name: 'mcp',
-        component: () => import('@/pages/mcp/McpPage.vue'),
-        meta: { title: 'MCP 管理', adminOnly: true },
-      },
-      {
-        path: 'audit',
-        name: 'audit',
-        component: () => import('@/pages/audit/AuditPage.vue'),
-        meta: { title: '审计日志', adminOnly: true },
-      },
-    ],
+    path: '/c/:conversationId',
+    name: 'conversation',
+    component: PlaygroundPage,
+    meta: { title: 'Agent Playground' },
   },
-  { path: '/:pathMatch(.*)*', redirect: { name: 'agents' } },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior: () => ({ top: 0 }),
-})
-
-router.beforeEach(async (to) => {
-  const auth = useAuthStore()
-  await auth.restore()
-
-  if (to.meta.public === true) {
-    if (auth.isAuthenticated && to.name === 'login') return { name: 'agents' }
-    return true
-  }
-  if (!auth.isAuthenticated) {
-    return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
-  }
-  if (to.meta.adminOnly === true && !auth.isAdmin) {
-    return { name: 'agents' }
-  }
-  return true
 })
 
 router.afterEach((to) => {
-  const title = to.meta.title
-  document.title = title !== undefined ? `${title} · Agent Studio` : 'Agent Studio'
+  document.title = typeof to.meta.title === 'string' ? to.meta.title : 'Agent Playground'
 })

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Agent Studio web console (Vue 3 + Semi Design)",
+  "description": "Agent Playground — configure capabilities and test conversations (Vue 3 + Semi Design)",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -p tsconfig.json --noEmit && vite build",

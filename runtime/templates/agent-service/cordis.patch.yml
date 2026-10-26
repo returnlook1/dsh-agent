@@ -1,0 +1,79 @@
+# DSH Agent Service —— 受限运行时补丁层
+#
+# 由 SnapshotMaterializer 复制到 <RUNTIME_DIR>/snapshots/<configKey>/home/profiles/agent-service/
+# 并替换 {{SKILLS_VIEW}} / {{WORKSPACE}} / {{TOOLS_PLUGIN}}。
+#
+# 基础树：@deepseek-ai/dsh-sdk-minimal（见同目录 package.json）。
+# 目标：只保留"模型 + 会话 + 技能 + MCP + 业务工具"，没有任何文件/命令/出网/子智能体能力。
+#
+# 事实依据（已实测）：
+# - 补丁行顺序没有加载语义，insert 顺序不影响激活；
+# - 同一 id 的 config 是**整段替换**，覆盖时必须写全要保留的字段；
+# - skill-filesystem 的技能源：<root>/<skill>/SKILL.md（目录 bundle）或 <root>/*.md（单文件）；
+# - includeDefaultRoots:false 时只扫 customSkillDirs，保证"没选中的技能不可见"。
+
+# ---------------------------------------------------------------------------
+# 1) 移除高权限能力
+# ---------------------------------------------------------------------------
+- id: pty
+  disabled: true
+- id: terminal-bash
+  disabled: true
+- id: terminal-pwsh
+  disabled: true
+- id: persistent-bash
+  disabled: true
+- id: persistent-pwsh
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-working-directory
+  disabled: true
+- id: session-log-deepseek
+  disabled: true
+
+# ---------------------------------------------------------------------------
+# 2) 工具呈现：native（不使用 PTC）
+# ---------------------------------------------------------------------------
+- id: tools
+  config:
+    mode: native
+
+# ---------------------------------------------------------------------------
+# 3) 系统提示词
+#    由服务按对话配置写入 AGENT_SERVICE_SYSTEM_PROMPT（每个快照一个值）。
+#    config 整段替换，所以要把 include* 一并写上。
+# ---------------------------------------------------------------------------
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    personaPrefix: !!js process.env.AGENT_SERVICE_SYSTEM_PROMPT ?? 'You are a helpful assistant. Use only the tools and skills provided in this environment.'
+
+# ---------------------------------------------------------------------------
+# 4) 沙箱默认 read-only（sdk-minimal 的 bundle 把 sandbox-policy 钉成 danger-full-access）
+# ---------------------------------------------------------------------------
+- id: sandbox-policy
+  config:
+    mode: read-only
+    workspaceRoot: '{{WORKSPACE}}'
+
+# ---------------------------------------------------------------------------
+# 5) Skills：注册表 + 文件系统提供者（只看 skills-view）+ 模型可见的 skill 工具
+# ---------------------------------------------------------------------------
+- insert:
+    - id: skill
+      name: '@deepseek-ai/dsh-skill'
+    - id: skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        # 只扫描本快照的 skills-view：没被选中的技能对模型完全不可见
+        includeDefaultRoots: false
+        customSkillDirs:
+          - '{{SKILLS_VIEW}}'
+        watch: false
+    - id: tool-skill
+      name: '@deepseek-ai/dsh-tool-skill'
+    # 业务工具（示例插件；不需要时把这一段删掉即可）
+    - id: agent-tools
+      name: '{{TOOLS_PLUGIN}}'

@@ -1,11 +1,12 @@
 # 验证报告
 
-本文档记录 Agent Studio 的**可复现验证**：跑了什么、断言什么、结果如何。
-所有数字都来自本机实际执行（一次完整 `npm run verify` 的收尾运行）。
+DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如何。
+数字来自本机实际执行（Windows，Node `v24.21.0`，DSH `0.2.1-rc.3`）。
 
-- 运行环境：Windows，Node `v24.21.0`，DSH `0.2.1-rc.3`（`@deepseek-ai/dsh` 与 `@deepseek-ai/dsh-sdk-client` 同版本）
 - 模型：`@deepseek-ai/dsh-llm-mock-server`（进程内 mock，无网络、无 API Key）
-- 数据：`runtime/tools/{datasets,stations}.json`（`npm run data:demo` 确定性子生成）
+- 技能：`runtime/skills/`（netcdf-analysis、gis-processing、model-analysis）
+- MCP：`config/mcp-servers.json` 里的 `data-center`（仓库自带的离线示例服务器）
+- 业务工具：`plugins/agent-tools`（4 个）
 
 ---
 
@@ -13,138 +14,114 @@
 
 | 套件 | 命令 | 结果 |
 | --- | --- | --- |
-| 类型检查（6 个包） | `npm run typecheck` | ✅ 0 错误 |
-| 单元测试 | `npm test` | ✅ 17 文件 / **150 用例** 通过 |
-| 受限运行时安全场景 | `npm run smoke` | ✅ **5/5** 场景通过（真实 DSH 子进程） |
-| 网关端到端 | `npm run e2e` | ✅ **51 项断言**通过（allow + approval 两种模式） |
-| 前端构建 | `npm run build:web` | ✅ `dist/` 产出（`index.html` + 分包资源） |
+| 类型检查（4 个包） | `npm run typecheck` | ✅ 0 错误 |
+| 单元测试 | `npm test` | ✅ 12 文件 / **127 用例** |
+| 运行时检查（真实 DSH） | `npm run check:runtime` | ✅ **12 项断言** / 3 个场景 |
+| 端到端（真实 HTTP+SSE） | `npm run e2e` | ✅ **48 项断言** / 2 个阶段 |
+| 前端构建 | `npm run build:web` | ✅ `dist/`（JS gzip 135 kB，CSS gzip 79 kB） |
+| 手工演示 | `npm run demo` | ✅ 选技能 → 发消息 → 工具调用 → 回答（见 §5） |
+
+一次性全跑：`npm run verify`。
 
 ---
 
-## 2. 单元测试覆盖（150 用例）
+## 2. 单元测试（127 用例）
 
-| 范围 | 文件 | 用例 | 覆盖点 |
+| 范围 | 用例 | 覆盖点 |
+| --- | --- | --- |
+| `apps/gateway/tests/skills/catalog` | 6 | 目录 bundle / 单文件 / 非法 frontmatter / 重名优先级 |
+| `apps/gateway/tests/runtime/configKey` | 5 | 数组顺序无关、字段敏感、稳定 |
+| `apps/gateway/tests/runtime/skillsView` | 9 | 只复制选中的技能、未知技能报错、单文件技能 |
+| `apps/gateway/tests/runtime/mcpOverlay` | 8 | stdio / streamable-http 两种渲染、`${ENV}` 与 `${REPO_ROOT}` 解析、未知变量 fail closed |
+| `apps/gateway/tests/store` | 10 | 原子写、损坏备份、并发追加、消息序号 |
+| `apps/gateway/tests/events` | 12 | DSH 事件 → 5 个业务事件、`assistant/message` 去重、`turn/end{error}`、工具配对 |
+| `apps/gateway/tests/runtime/pool` | 9 | 复用/上限/回收/resume/传输错误广播 |
+| `apps/gateway/tests/api/service` | 25 | 全部接口与错误码（400/401/404/409/503） |
+| `plugins/agent-tools` | 27 | 参数边界、站点白名单、确定性输出、目录一致性 |
+| `apps/web/tests` | 16 | SSE 解析（分块/CRLF/`: ping`/多行 data/`message.failed` 提前终止）、事件归并、409、历史回放 |
+
+---
+
+## 3. 运行时检查（`npm run check:runtime`）
+
+每个场景按服务的方式物化一个快照（独立的 `DSH_HOME` + `skills-view` + 补丁），用 mock 模型
+驱动**真实 DSH 子进程**：
+
+| 场景 | 模型要求调用 | 期望 | 实际 |
 | --- | --- | --- | --- |
-| shared 契约 / 策略匹配 | `plugins/agent-policy/src/{matcher,contracts,redact,revocation,approval,plugin}.test.ts` | 64 | 通配与 deny 优先级、快照校验、脱敏、撤销缓存、审批超时/拒绝/中止、假 ctx 装载 |
-| 业务工具 | `plugins/agent-tools/src/{tools,catalog}.test.ts` | 27 | 参数越界、站点白名单、确定性输出、目录与注册工具一致性 |
-| 审计插件 | `plugins/agent-audit/src/plugin.test.ts` | 9 | 单行 JSONL、`durationMs` 配对、`block` 去重、策略拒绝不重复记账、写失败不影响执行 |
-| 网关策略/事件/审批 | `apps/gateway/tests/runtime/*` | 21 | 策略快照生成、MCP 通配降级、事件映射与去重、审批桥过期/落盘 |
-| 网关 API/仓储/服务 | `apps/gateway/tests/{api,repositories,services}/*` | 29 | 登录与令牌、SSE 帧、SPA 路由回退、归属隔离、运行限额 |
+| `skill` | `skill{name:"netcdf-analysis"}` | 能加载被选中的技能 | ✅ 工具成功 |
+| `skill-hidden` | `skill{name:"gis-processing"}` | 未选中的技能不可见 | ✅ 失败：`skill "gis-processing" is unknown or no longer available` |
+| `mcp` | `mcp__data-center__search_dataset` | 被选中的 MCP 工具可调用 | ✅ 工具成功，返回数据集列表 |
 
-关键断言举例：
-
-- `matcher.test.ts`：`allow mcp__*` + `deny mcp__water__*` 组合下，`mcp__water__query` 必须被拒绝（防止通配互相"遮盖"）。
-- `plugin.test.ts`：未授权工具返回 `{kind:'deny'}`；`revoked.json` 出现后所有调用返回拒绝；`ask` 在决策文件出现后才放行，超时按拒绝处理。
-- `DshEventAdapter.test.ts`：同一 `message.id` 重复推送只落一条；`turn/end{reason:{kind:'error'}}` 映射为 `agent.failed`；`turn/start` 超过 `maxTurns` 触发 `run.limit`。
-- `plugin.test.ts`（audit）：策略已记录 deny 行时，`tools/result` 的失败回调**不再重复记账**。
+这组断言证明了本服务最关键的设计：**能力隔离靠"运行时里有什么"实现**，
+不是靠提示词请求模型"不要用"。
 
 ---
 
-## 3. 受限运行时安全场景（`npm run smoke`）
-
-每个场景从零创建一个运行时：独立 `DSH_HOME`、空工作目录、独立策略快照、独立审计文件；
-模型由 mock 扮演，**要求调用指定工具**，由脚本观察运行时行为与审计文件。
-
-| 场景 | 模型要求调用 | 策略 | 期望 | 实际 |
-| --- | --- | --- | --- | --- |
-| `text` | 无 | 允许 3 个工具 | 纯文本回复 | ✅ 链路通，审计 0 条 |
-| `allow` | `query_station` | `allow` | 执行成功 | ✅ `decision=allow` + `status=succeeded` |
-| `deny` | `query_station` | 未授权 | 拒绝执行 | ✅ 工具错误「工具 query_station 未获得授权」，审计 `deny/denied` |
-| `ask` | `export_report` | `ask` | 审批通过后执行 | ✅ 出现请求文件 → 脚本写 `allowed-once` → 执行成功，审计 `approved/succeeded` |
-| `reject` | `export_report` | `ask` | 审批拒绝不执行 | ✅ 脚本写 `rejected` → 工具失败，审计 `rejected/denied` |
-
-代表性输出（`deny` 场景）：
-
-```
-tool/call query_station {"stationId":"ST-3101","days":7}
-tool/result ERROR: Error: 工具 query_station 未获得授权
-审计记录 1 条：
-  - query_station decision=deny status=denied error=工具 query_station 未获得授权
-```
-
-`ask` 场景：
-
-```
-tool/call export_report {"stationId":"ST-3101","format":"pdf"}
-→ approver wrote allowed-once for 91bad273-...
-tool/result ok: { "reportId": "...", "path": "...", ... }
-审计记录 2 条：
-  - export_report decision=approved status=started   approval=91bad273-...
-  - export_report decision=approved status=succeeded approval=91bad273-...
-```
-
----
-
-## 4. 网关端到端（`npm run e2e`）
+## 4. 端到端（`npm run e2e`）
 
 真实 Fastify 进程 + 真实 DSH 子进程 + mock 模型，全部通过 HTTP/SSE 驱动。
 
-### 4.1 `--mode allow`（30 项断言）
+### 4.1 阶段 A（37 项断言）
 
-链路：`/api/health` → 错误密码被拒 → 管理员登录 → `/api/auth/me` → 工具目录（4 个业务工具）→
-创建 Agent → 发布（内部执行 `dsh --dump-config` 校验插件树）→ `/api/agents/:id/tools` →
-创建会话（绑定已发布版本）→ 发消息（SSE）→ 审计 → 第二轮 → 运行时状态 → 停止 → 越权抽查。
+- `/api/skills` 返回 3 个技能（含 description 与 roots）；
+- `/api/mcp-servers` 返回 `data-center`（enabled）与 `gis-service`（disabled）；
+- 项目配置：未保存时 `saved:false` → PUT → GET 回读一致；
+- 未知技能/服务器 → `400 SKILL_UNKNOWN` / `400 MCP_UNKNOWN`；
+- 创建对话 201，快照**继承项目 skills**、带 `configKey` 与 `inheritedFromProject`；
+- 未开始时 `PUT /config` 可改（并再次改回）；**已开始后返回 409 `CONVERSATION_STARTED`**；
+- 发消息 SSE 实测序列：`message.started → tool.started → tool.completed → message.completed`，
+  工具名 `skill` 且成功；
+- 历史消息：user + assistant，assistant 带 `toolCalls`；
+- 运行时复用：同配置的第二个对话也跑一轮后，`/api/runtimes` 仍只有 **1 个**运行时，
+  `conversationCount = 2`。
 
-SSE 事件序列（真实抓取）：
+### 4.2 阶段 B（11 项断言）
 
-```
-run.started → message.delta → tool.started → tool.completed → message.delta → agent.completed
-```
-
-断言结果：`tool.started.tool = query_station`、`tool.completed.success = true`、
-审计 `decision=allow / status=succeeded`、消息落库 `user + assistant`（第二轮数量增加）、
-普通用户读审计返回 403、普通用户建 Agent 返回 403、网关托管前端静态资源返回 200。
-
-### 4.2 `--mode approval`（21 项断言）
-
-链路：创建 `export_report: ask` 的 Agent → 发消息 → **SSE 中出现 `approval.required`** →
-`POST /api/approvals/:approvalId/decision {allowed-once}` → `approval.decided` → 工具执行成功。
-
-真实事件序列：
-
-```
-（批准）run.started → message.delta → tool.started → approval.required → approval.decided → tool.completed → message.delta → agent.completed
-（拒绝）run.started → message.delta → approval.required → approval.decided → tool.completed → message.delta → agent.completed
-```
-
-断言结果：批准后 `tool.completed.success = true` 且审计 `approved/succeeded`；拒绝后
-`success = false` 且审计 `rejected/denied`；审批记录状态分别为 `allowed` / `rejected`；
-普通用户审批他人会话返回 403/404。
-
-> 这条链路证明了方案里最关键的一环：**审批决定确实回传到了运行中的 Agent 进程**，
-> 而不是只在前端界面上"看起来被批准了"。
+- 选中 `data-center` 的对话：模型调用 `mcp__data-center__search_dataset` 成功；
+- `inheritProjectConfig:false` 的对话：`skills` 为空、`configKey` 与前者不同；
+- 该对话再请求同一个 MCP 工具 → **失败，错误码 `UNKNOWN_TOOL`**（工具根本不存在）；
+- `/api/runtimes` 变为 **2 个**运行时，MCP 运行时的 `mcpServers` 含 `data-center`。
 
 ---
 
-## 5. 已知未验证项
+## 5. 手工演示（`npm run demo`，离线）
+
+`scripts/demo.mjs` 一条命令起 mock 模型 + 服务，并给项目 `default` 种一份演示配置
+（skills = netcdf-analysis, gis-processing；mcp = data-center）。实际观察：
+
+```
+health: {"ok":true,"version":"2.0.0","dshVersion":"0.2.1-rc.3","runtimes":0,"uptimeSec":20}
+GET /                     -> 200 (index.html)
+GET /c/<id>               -> 200 (SPA 回退到 index.html)
+GET /assets/index-…js     -> 200 (435 KB)
+POST /api/conversations   -> configKey=1568900ba4f6fbc5 skills=netcdf-analysis,gis-processing mcp=data-center
+SSE: message.started -> tool.started -> tool.completed -> message.completed
+final: 已完成。这是一段来自本地 mock 模型的示例回答。
+messages: 2（user / assistant，assistant.toolCalls = ["skill"]）
+runtimes: 1 个（skills=netcdf-analysis/gis-processing, mcp=data-center）
+```
+
+---
+
+## 6. 未验证项
 
 | 项目 | 原因 |
 | --- | --- |
-| 真实模型（DeepSeek 官方 API）调用 | 本次验证只用 mock 模型；真实调用需开发者提供 API Key，代码路径与 mock 完全一致（同一 adapter，仅 baseURL 不同） |
-| MCP 服务器真实联通 | 仓库内没有可用的外部 MCP 服务；`McpProbe` 的 stdio `initialize`/`tools/list` 有单测，profile 覆盖层有 `--dump-config` 证据，但未做真机联通 |
-| 浏览器 UI 端到端 | 前端做了类型检查、生产构建，SSE 解析器用真实源码跑过 6 组用例（分包/CRLF/注释/多行 data/尾帧/中途取消）；没有 Playwright 自动化 |
-| 多用户并发压力 | 单机 SQLite + 每会话一进程，未做压测 |
-| Windows 信号处理 | `SIGTERM` 在 Windows 上不会走 Node 处理器；优雅关闭逻辑面向真实部署环境 |
+| 真实模型调用 | 本次全用 mock 模型；代码路径与真实调用一致（同一 adapter，仅 baseURL 与 key 不同） |
+| 真实外部 MCP 服务 | 只用仓库自带 example server（stdio）验证；streamable-http 分支有单测与配置渲染验证，未连真实服务 |
+| 浏览器自动化 | 前端做了类型检查、生产构建、SSE/事件归并单测与 SSR 渲染冒烟；没有 Playwright |
+| 并发压力 | 单机 JSON 存储 + 每配置一个运行时，未压测 |
+| 空闲回收 | 逻辑有单测；没有跑满 `RUNTIME_IDLE_MS`（默认 5 分钟）的实测 |
 
 ---
 
-## 6. 复现步骤
+## 7. 复现
 
 ```powershell
 npm install --cache .npm-cache --no-audit --no-fund --ignore-scripts
 npm run build
 npm run data:demo
-npm run verify
+npm run verify        # typecheck + 单测 + 运行时检查 + e2e
+npm run demo          # 打开 http://127.0.0.1:8787 手动体验
 ```
-
-只跑某一层：
-
-```powershell
-npm run typecheck
-npm test
-npm run smoke
-node scripts/e2e-gateway.mjs --mode approval --keep
-```
-
-> `smoke` / `e2e` 会启动带管道 stdio 的子进程。若你的环境禁止子进程（受限沙箱），
-> 这两条命令无法执行，但 `typecheck` / `test` / `build` 不受影响。

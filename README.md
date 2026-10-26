@@ -1,222 +1,234 @@
-# Agent Studio
+# DSH Agent Service
 
-基于 **DeepSeek Harness（DSH）** 的受限 Agent 平台。它保留原版 DSH 的 Agent Loop、Provider、
-Session、MCP、Skills 能力，自己提供 Agent 管理、权限策略、MCP 管理和聊天界面。
+一个**可配置的 Agent 对话服务**：业务后端按"项目 / 对话"指定要用的 **Skills** 与 **MCP 服务器**，
+前端通过统一的 HTTP + SSE 接口调用。模型调用、Agent Loop、Session、Skills、MCP 全部由
+DeepSeek Harness（DSH）负责，本服务只做**配置管理 + SDK 适配 + HTTP/SSE 接口 + 一个测试页面**。
 
-- **不重写 Agent Loop**：推理、上下文、工具调度都用 DSH。
-- **不修改 DSH 源码**：能力扩展全部通过独立 Profile + Cordis 插件 + `--patch` 叠加。
-- **前端拿不到 DSH 管理权限**：浏览器只访问本项目的 Gateway，DSH 只通过 stdio JSON-RPC 被网关驱动。
-- **工具权限由服务端强制执行**：Agent 能做什么不由提示词或按钮决定，而由运行时的策略快照 + 守卫决定。
-
-固定版本：`@deepseek-ai/dsh@0.2.1-rc.3` + `@deepseek-ai/dsh-sdk-client@0.2.1-rc.3`（两者必须同版本）。
-
----
-
-## 1. 能力清单与完成度
-
-| 阶段 | 内容 | 状态 |
-| --- | --- | --- |
-| **P0 基础接入** | SDK 驱动真实 DSH 运行时、多轮会话、SSE 事件流、消息落库 | ✅ 已实现并端到端验证 |
-| **P1 安全控制** | Agent 配置、工具 allow/deny/ask、`ctx.tools.guard()` 强制拒绝、审批通道、运行时隔离、审计、撤销 | ✅ 已实现并端到端验证 |
-| **P2 管理平台** | Agent 编辑/发布/版本、工具目录与参数级授权、MCP 管理（stdio 探测）、审计查询、运行时状态 | ✅ 已实现 |
-| **P3 平台增强** | 运行时池、多租户、记忆、监控、嵌入组件 | ⛔ 未实现（见 §8） |
-
-已用自动化验证的安全结论（详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)）：
-
-- 未授权工具**确实无法执行**（策略插件在 `tools/pre-execute` + 单调 `guard` 双层拦截）；
-- `ask` 工具必须经过**网关 → 控制通道文件 → 插件**的异步审批，批准才执行、拒绝/超时一律不执行；
-- 管理员撤销后，后续所有工具调用立即失败（每次调用都检查撤销标记）；
-- 普通用户无法读取审计、无法创建 Agent、无法批准他人会话。
-
----
-
-## 2. 架构
+不做的事（有意为之）：不做 Agent 管理平台、不做用户/角色/登录、不做审批与审计、
+不做 Agent 版本发布。这些属于业务后端，或由 DSH 自己的会话日志承担。
 
 ```
-浏览器（Vue3 + Semi Design，Pinia + Vite）
-   │  REST + SSE（只访问网关，绝不直连 DSH）
+业务前端（聊天组件 / GIS 工作台）
+   │  REST + SSE（只依赖 5 个业务事件）
    ▼
-Agent Gateway（Node 24 + Fastify 5 + node:sqlite）
-   │ ① 认证/授权 ② Agent 配置与版本 ③ 会话编排 ④ 审批 ⑤ 审计 ⑥ MCP 探测
-   │ stdio JSON-RPC（@deepseek-ai/dsh-sdk-client）
+DSH Agent Service（Node 24 + Fastify 5）
+   │  能力清单 · 项目/对话配置 · 运行时池 · 事件适配
    ▼
-DSH Runtime 子进程（每个业务会话一个，独立 DSH_HOME / 工作目录 / 策略）
-   │ 原版 Agent Loop · Provider · Session · MCP · 工具注册表
-   ├─ plugins/agent-policy   工具白名单 + 单调守卫 + 审批 + 撤销
-   ├─ plugins/agent-tools    业务工具（4 个）
-   └─ plugins/agent-audit    工具执行审计（JSONL）
-   ▼
-业务数据（JSON 快照） / MCP Server / SQLite
+DSH Runtime（@deepseek-ai/dsh@0.2.1-rc.3）
+   └─ 原生 Agent Loop / Session / Provider
+      + Skills（dsh-skill + skill-filesystem + tool-skill）
+      + MCP（选中服务器各一个 dsh-mcp-client 实例）
+      + 业务工具（plugins/agent-tools，示例，可删）
 ```
 
-四层权限模型（实现位置）：
-
-| 层 | 作用 | 实现 |
-| --- | --- | --- |
-| L1 能力 | 允许哪些插件/工具存在 | `runtime/templates/studio/cordis.patch.yml`（移除 shell/fs/web/subagent/PTC） |
-| L2 执行策略 | allow / deny / ask | `plugins/agent-policy`（`tools/pre-execute` + `ctx.tools.guard`） |
-| L3 用户授权 | 哪个用户能访问哪些数据 | 网关归属校验 + 业务工具内部站点白名单 |
-| L4 系统隔离 | 文件/进程/网络/凭据 | 独立 `DSH_HOME`、空工作目录、最小环境变量、独立凭据、`sandbox-policy: read-only` |
-
----
-
-## 3. 快速开始
-
-前置：Node.js ≥ 22.5（本机 24.21.0），Windows PowerShell 或 bash 均可。
+## 1. 快速开始
 
 ```powershell
-# 1) 安装（仓库根目录；用 npm workspaces，见 docs/DECISIONS.md §1）
+# 安装（仓库根目录）
 npm install --cache .npm-cache --no-audit --no-fund --ignore-scripts
 
-# 2) 构建（shared → 三个插件 → 网关 → 前端）
+# 构建 + 生成演示数据
 npm run build
-
-# 3) 生成演示业务数据（监测站 + 30 天序列）
 npm run data:demo
 ```
 
-### 3.1 离线演示（无需 API Key）
+### 离线运行（无需 API Key）
 
 ```powershell
-# 终端 A：本地 mock 模型（工具调用 + 文本结论循环）
+# 终端 A：本地 mock 模型（第一次请求会要求调用工具，之后返回文本）
 npm run mock:llm
 
-# 终端 B：网关（把模型端点指向 mock）
+# 终端 B：服务
 $env:MOCK_LLM='1'
 $env:DEEPSEEK_API_KEY='mock-key'
 $env:DEEPSEEK_BASE_URL='http://127.0.0.1:8899/v1'
 npm start
 ```
 
-### 3.2 使用真实模型
+打开 **http://127.0.0.1:8787** → Agent Playground：左侧选项目、Skills、MCP、模型 → 新建对话 →
+发消息，右侧能看到助手回复与工具调用卡片。
+
+### 接入真实模型
 
 ```powershell
 $env:DEEPSEEK_API_KEY='<你的 key>'
 $env:DSH_PROVIDER='deepseek-official'
-$env:DSH_MODEL='deepseek-flash'    # 必须以 Provider 实际模型名为准
+$env:DSH_MODEL='deepseek-flash'   # 必须以 Provider 实际模型名为准
 npm start
 ```
 
-打开 <http://127.0.0.1:8787>，预置账号：
+## 2. 两级能力配置
 
-| 账号 | 密码 | 角色 |
+| 层级 | 存在哪里 | 作用 |
 | --- | --- | --- |
-| `admin` | `admin123` | 管理员（建 Agent、发布、MCP、审计、审批） |
-| `demo` | `demo123` | 普通用户（只能用已发布 Agent 聊天） |
+| 项目级 | `data/store.json` 的 `projects[projectId]` | 项目默认能力，项目下新对话默认继承 |
+| 对话级 | 创建对话时冻结的**配置快照** | 覆盖/扩展项目配置；对话开始后不可改 |
 
-> **部署前必须改掉预置密码**，并设置 `AUTH_SECRET`（不设置时网关会在 `data/.auth-secret` 生成一个）。
-
-典型流程：登录 `admin` → Agent 管理 → 新建 Agent（工具能力页勾选 `query_station` / `search_datasets`，
-`export_report` 设为“需审批”）→ 发布 → 进入聊天 → 发消息；触发 `export_report` 时右侧会弹出审批框，
-选择“允许一次”后工具才执行。
-
----
-
-## 4. 目录结构
-
-```
-apps/
-  gateway/           Fastify 网关：REST + SSE、运行时管理、审批、审计、SQLite
-  web/               Vue3 + Semi Design 管理端与聊天端
-plugins/
-  agent-policy/      工具策略插件（allow/deny/ask、撤销、审批通道）
-  agent-tools/       业务工具插件（search_datasets / query_station / map_fly_to / export_report）
-  agent-audit/       审计插件（JSONL）
-packages/shared/     前后端共用的类型与 zod 契约（AgentConfig / AgentEvent / PolicySnapshot / DTO）
-runtime/
-  templates/studio/  受限 Profile 模板（package.json + cordis.patch.yml + mcp.cordis.yml）
-  tools/             演示业务数据（由 scripts/gen-demo-data.mjs 生成）
-  homes/ workspaces/ patches/ policies/   运行时生成（gitignore）
-scripts/
-  mock-llm-server.mjs  本地 mock 模型
-  smoke-run.mjs        5 个安全场景，真实 DSH 子进程
-  e2e-gateway.mjs      网关 HTTP/SSE 端到端（allow + approval 两种模式）
-  gen-demo-data.mjs    演示数据生成器
-docs/                  研究结论、架构决策、实现规格、验证报告
-data/                  SQLite（gitignore）
+```jsonc
+// PUT /api/projects/ocean-project/agent-config
+{
+  "skills": ["netcdf-analysis", "gis-processing"],
+  "mcpServers": ["data-center"],
+  "provider": "deepseek-official",
+  "model": "deepseek-flash",
+  "systemPrompt": "你是海洋环境分析助手。"
+}
 ```
 
----
+合并规则（在 `packages/shared/src/agent-config.ts` 的 `mergeAgentConfig`，有单测）：
 
-## 5. 验证
+- `skills` / `mcpServers`：**并集**（扩展）；
+- `provider` / `model` / `systemPrompt`：对话值优先，缺省回落到项目值；
+- `inheritProjectConfig: false` 时完全不看项目配置。
+
+**对话开始后配置不可变**：`PUT /api/conversations/:id/config` 只在还没有消息时生效，
+否则返回 `409 CONVERSATION_STARTED`。要换能力就新开一个对话——已有会话不会因为配置变更
+而"中途换脑子"。
+
+## 3. Skills 与 MCP 是怎么生效的
+
+`0.2.1-rc.3` 的 SDK 只有 `initialize(provider/model/maxTokens)`，**没有**按会话传
+`skills[]` / `mcpServers[]` 的入口；能力只能由 profile + Cordis 插件组合决定。所以：
+
+- **Skills**：服务把被选中的技能**复制**到 `runtime/snapshots/<configKey>/skills-view/`，
+  运行时只挂这个目录（`includeDefaultRoots:false`）。没被选中的技能对模型完全不可见
+  （实测调用返回 `skill "xxx" is unknown or no longer available`）。
+- **MCP**：服务为每个被选中的服务器生成一个 `dsh-mcp-client` 插件条目，模型看到的工具名是
+  `mcp__<serverId>__<tool>`。没挂载的服务器，其工具就不存在（调用会失败）。
+- **复用**：配置指纹相同 = 同一个 `DSH_HOME` + 同一份 patch = 同一个运行时，可承载多个会话；
+  配置不同 = 不同运行时。
+
+技能就是一个目录或单文件（DSH 原生约定）：
+
+```
+runtime/skills/
+  netcdf-analysis/SKILL.md     # 目录 bundle
+  model-analysis.md            # 单文件技能
+```
+
+`SKILL.md` 头部的 frontmatter 至少要有 `name` 与 `description`，可选 `whenToUse`：
+
+```markdown
+---
+name: netcdf-analysis
+description: 分析海洋数值模拟与观测的 NetCDF 数据
+whenToUse: 需要读取 .nc 文件、计算流场统计量时
+---
+正文……
+```
+
+MCP 服务器定义在 `config/mcp-servers.json`（支持 stdio 与 streamable-http；`${ENV_NAME}` 从服务
+进程环境取值，`${REPO_ROOT}` 指向仓库根）。仓库自带一个**离线可运行**的示例服务器
+`scripts/mcp-data-center-server.mjs`（`search_dataset` / `get_dataset_meta` / `get_flow_field`）。
+
+## 4. API
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/health` | 健康检查（含 DSH 版本） |
+| GET | `/api/skills` | 可用技能清单 |
+| GET | `/api/mcp-servers` | 可用 MCP 服务器 |
+| GET / PUT | `/api/projects/:projectId/agent-config` | 项目默认能力 |
+| POST | `/api/conversations` | 创建对话（返回 conversationId / sessionId / 配置快照） |
+| GET | `/api/conversations?projectId=` | 历史对话列表 |
+| GET | `/api/conversations/:id` | 对话详情 |
+| GET / PUT | `/api/conversations/:id/config` | 配置快照（仅在未开始时可改） |
+| GET | `/api/conversations/:id/messages` | 历史消息 |
+| POST | `/api/conversations/:id/messages` | 发送消息 → **SSE** |
+| GET | `/api/runtimes` | 运行时排障视图 |
+
+SSE 只发 5 个业务事件，前端**不需要**理解 DSH 的原始通知：
+
+```
+message.started    { conversationId, messageId, role }
+message.completed  { conversationId, messageId, text }
+tool.started       { conversationId, callId, tool, argumentsPreview }
+tool.completed     { conversationId, callId, tool, success, error?, durationMs? }
+message.failed     { conversationId, message, code? }
+```
+
+创建对话 / 发消息：
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/conversations \
+  -H 'Content-Type: application/json' \
+  -d '{"projectId":"ocean-project","skills":["netcdf-analysis"],"mcpServers":["data-center"]}'
+
+curl -N -X POST "http://127.0.0.1:8787/api/conversations/conv-…/messages" \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"查询长江口今天的流场数据"}'
+```
+
+> **没有逐字流式**：DSH 在 `0.2.1-rc.3` 里每个 step 只提交一条 `assistant/message`，
+> 所以 `message.completed` 就是"一段完整文本"，前端不要做打字机模拟。
+
+完整契约与错误码见 [docs/SERVICE.md](docs/SERVICE.md)。
+
+## 5. 配置
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `PORT` / `HOST` | `8787` / `127.0.0.1` | 默认只监听本机，由业务后端调用 |
+| `DATA_DIR` | `<repo>/data` | `store.json` 与消息 JSONL |
+| `RUNTIME_DIR` | `<repo>/runtime` | 运行时快照（`snapshots/<configKey>/`） |
+| `SKILLS_DIRS` | `<repo>/runtime/skills` | 技能根目录（逗号分隔） |
+| `MCP_CONFIG` | `<repo>/config/mcp-servers.json` | MCP 服务器定义 |
+| `DSH_BIN` | `<repo>/node_modules/@deepseek-ai/dsh/lib/bin.js` | DSH 入口 |
+| `AGENT_SERVICE_DSH_PROFILE` | `agent-service` | 运行时 profile（不读宿主 `DSH_PROFILE`） |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` | – | Provider 凭据，只注入子进程环境 |
+| `MOCK_LLM` | – | 非空 = 离线模式 |
+| `RUNTIME_IDLE_MS` | `300000` | 空闲运行时回收（回收后同配置下次自动 resume） |
+| `TURN_TIMEOUT_MS` | `600000` | 单轮上限 |
+| `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 `Authorization: Bearer` |
+| `CORS_ORIGINS` | – | 允许的前端来源（逗号分隔），默认同源 |
+| `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
+
+## 6. 验证
 
 ```powershell
-npm run typecheck   # 全部包类型检查
-npm test            # 150 个单测（不联网、不起子进程）
-npm run smoke       # 5 个安全场景，启动真实 DSH 运行时（mock 模型）
-npm run e2e         # 51 项 HTTP/SSE 断言，含审批批准与拒绝
-npm run verify      # 以上全部
+npm run typecheck        # 全部包类型检查
+npm test                 # 单元测试（不联网、不启动 DSH）
+npm run check:runtime    # 真实 DSH 运行时：技能可见性 + MCP 工具
+npm run e2e              # 真实 HTTP/SSE：配置继承/复用/MCP 隔离
+npm run verify           # 以上全部
 ```
 
-最近一次全量结果与逐项证据见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
+最近一次结果见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
-> 说明：`smoke` / `e2e` 需要启动带管道的子进程（DSH 子进程 + stdio JSON-RPC）。
-> 在受限沙箱里（禁止 `spawn` 管道）需要放行进程创建，否则无法运行；单测与类型检查不受影响。
+## 7. 目录结构
 
----
+```
+apps/gateway/            Agent Service（Fastify + JSON 存储 + 运行时池）
+apps/web/                Agent Playground（Vue3 + Semi Design）
+packages/shared/         前后端共用契约（配置 / 对话 / 事件 / 消息）
+plugins/agent-tools/     示例业务工具（可删除）
+runtime/templates/       agent-service profile 模板（DSH 组合，单一事实来源）
+runtime/skills/          示例技能（netcdf-analysis / gis-processing / model-analysis）
+runtime/tools/           业务工具演示数据
+config/mcp-servers.json  MCP 服务器定义
+scripts/                 mock 模型、MCP 示例服务器、运行时检查、e2e
+docs/                    服务规格、决策记录、DSH 研究结论
+```
 
-## 6. 配置
+## 8. 已知边界
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `PORT` / `HOST` | `8787` / `127.0.0.1` | 只监听本机 |
-| `DATA_DIR` | `<repo>/data` | SQLite 与密钥文件 |
-| `RUNTIME_DIR` | `<repo>/runtime` | 运行时 home/workspace/patch/policy |
-| `DSH_BIN` | `node_modules/@deepseek-ai/dsh/lib/bin.js` | DSH 运行时入口 |
-| `AGENT_STUDIO_DSH_PROFILE` | `studio` | 受限 profile 名（不读宿主的 `DSH_PROFILE`） |
-| `DEEPSEEK_API_KEY` | – | Provider 凭据，只注入子进程环境 |
-| `DEEPSEEK_BASE_URL` | – | 指向 mock 或私有网关 |
-| `MOCK_LLM` | – | 非空表示离线模式（不向真实端点发请求） |
-| `AUTH_SECRET` | 自动生成 | 令牌签名密钥 |
-| `TOKEN_TTL_HOURS` | `12` | 令牌有效期 |
-| `RUNTIME_IDLE_MS` | `600000` | 运行时空闲回收 |
-| `APPROVAL_TIMEOUT_MS` | `120000` | 审批超时（超时即拒绝） |
-| `WEB_DIST` | `apps/web/dist` | 由网关托管的前端产物 |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| 边界 | 说明 |
+| --- | --- |
+| 无鉴权 | 默认只监听 `127.0.0.1`；需要内网暴露时设 `INTERNAL_TOKEN`。用户/项目权限由业务后端校验 |
+| 单机 | 一个进程 + JSON 存储；没有多机调度与队列 |
+| 无逐字流式 | DSH 不提供 token 级增量（见上） |
+| 无中途取消 | SDK 没有单轮取消接口；超时后关闭该运行时（会话历史仍在，下次重建后 resume） |
+| 配置变更 | 已开始的对话不能换能力；新开对话生效 |
+| MCP | 支持 stdio 与 streamable-http；未做 OAuth/凭据托管 |
 
----
-
-## 7. 安全边界（部署必读）
-
-1. **审批是异步带外的**：`0.2.1-rc.3` 的 SDK 没有 server→client 请求通道，审批走运行目录下的
-   文件控制通道（插件写请求、网关写决定、插件轮询）。超时、通道异常、策略缺失一律**拒绝**。
-2. **没有 OS 级沙箱**：L4 只做到"独立 home + 空工作目录 + 最小环境变量 + 移除高危插件"。
-   生产部署应以低权限账户运行网关，并收紧 `runtime/` 与 `data/` 的 NTFS/POSIX 权限。
-3. **MCP stdio 的 command 由管理员配置**，等同于管理员在该主机上执行命令。只允许受信任的管理员
-   配置 MCP；不要把 MCP 管理开放给普通用户。
-4. **凭据走环境变量**：受限 Agent 没有 shell 工具，因此取不到 `DEEPSEEK_API_KEY`；若将来给某个
-   Agent 开 shell，必须改用托管凭据文件（见 `docs/RESEARCH-PROVIDER.md` §2）。
-5. **提示词不是权限**：系统提示词只影响模型行为；真正的限制在插件与 Profile 里。修改工具授权
-   必须发布新版本，旧版本策略快照不会被覆盖。
-
----
-
-## 8. 已知限制（P3 待办）
-
-| 限制 | 现状 | 建议 |
-| --- | --- | --- |
-| 逐字流式 | SDK 只提供**每个 step 一条已提交消息**，没有 token 级增量。前端如实按整段渲染，不假装打字机 | 等 DSH 提供流式通知 |
-| 中途停止 | SDK 无单轮取消接口；"停止"= 关闭该会话运行时，下条消息重新 resume | 运行时池 + 软取消 |
-| 每会话一个进程 | 隔离清晰但资源占用高 | 按权限分组做运行时池 |
-| `temperature` | 当前版本 Provider 不支持按 Agent 配置；发布时给出 warning，不静默忽略 | 自写 `agent/request` 插件或等上游支持 |
-| MCP sse/http 探测 | 只实现 stdio 的 `initialize` + `tools/list`；sse/http 可写进 profile 但无法在 UI 预检 | 补 HTTP/SSE 探测 |
-| 单机 SQLite | 多用户并发上限受单机限制 | 换 PostgreSQL + 队列 |
-| 前端无 E2E | 构建、类型、SSE 解析均有验证，但没有浏览器自动化 | 接入 Playwright |
-
----
-
-## 9. 文档索引
+## 9. 文档
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | 架构决策记录：为什么这样分层、为什么用文件控制通道、配置落地矩阵、安全红线 |
-| [docs/IMPL-GATEWAY.md](docs/IMPL-GATEWAY.md) | 网关实现规格：模块、数据库 DDL、认证、事件映射、审批桥、API 表、SSE 流程 |
-| [docs/IMPL-PLUGINS.md](docs/IMPL-PLUGINS.md) | 三个 Cordis 插件的规格：环境变量、拦截逻辑、审批协议、审计字段 |
-| [docs/RESEARCH-SDK.md](docs/RESEARCH-SDK.md) | DSH SDK 0.2.1-rc.3 实测结论：通知、事件、流式粒度、审批缺失、恢复 |
-| [docs/RESEARCH-PROFILE.md](docs/RESEARCH-PROFILE.md) | Profile 组合与 patch 语法、受限树、系统提示词、MCP 挂载、沙箱 |
-| [docs/RESEARCH-TOOLS.md](docs/RESEARCH-TOOLS.md) | `defineTool`、`tools/pre-execute`、`guard`、`restrict` 的实测语义 |
-| [docs/RESEARCH-PROVIDER.md](docs/RESEARCH-PROVIDER.md) | 凭据解析顺序、per-agent 生成参数、离线 mock 模型配方 |
-| [docs/VERIFICATION.md](docs/VERIFICATION.md) | 验证报告：命令、场景、断言与结果 |
-| [plugins/README.md](plugins/README.md) | 插件开发与构建说明 |
-
-参考方案原文：[基于 DSH 的受限 Agent 平台实施方案.md](基于%20DSH%20的受限%20Agent%20平台实施方案.md)。
+| [docs/SERVICE.md](docs/SERVICE.md) | 服务规格：配置、存储、运行时池、事件映射、API、SSE、测试要求 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 决策记录：分层、快照、从平台版精简的原因 |
+| [docs/VERIFICATION.md](docs/VERIFICATION.md) | 验证报告：命令、场景、断言、结果 |
+| [docs/RESEARCH-SDK.md](docs/RESEARCH-SDK.md) | DSH SDK 0.2.1-rc.3 实测结论 |
+| [docs/RESEARCH-PROFILE.md](docs/RESEARCH-PROFILE.md) | profile/patch 组合与受限树 |
+| [docs/RESEARCH-PROVIDER.md](docs/RESEARCH-PROVIDER.md) | 凭据、生成参数、离线 mock 配方 |
+| [docs/RESEARCH-TOOLS.md](docs/RESEARCH-TOOLS.md) | 工具 API 实测（`defineTool` / `pre-execute` / `guard`） |

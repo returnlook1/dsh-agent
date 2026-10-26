@@ -1,44 +1,59 @@
-/** Fastify 应用装配：错误处理、鉴权守卫、全部路由、可选静态前端与 CORS。 */
-import Fastify, { type FastifyInstance } from 'fastify'
-import type { AppContext } from './context.js'
-import { createAuthGuards } from './auth/guard.js'
-import { registerErrorHandler } from './http/errors.js'
-import { registerAuthRoutes } from './api/auth.js'
-import { registerAgentRoutes } from './api/agents.js'
-import { registerSessionRoutes } from './api/sessions.js'
-import { registerApprovalRoutes } from './api/approvals.js'
-import { registerMcpRoutes } from './api/mcp.js'
-import { registerAuditRoutes } from './api/audit.js'
-import { registerRuntimeRoutes } from './api/runtime.js'
-import { registerHealthRoutes } from './api/health.js'
+/**
+ * Fastify 应用装配：错误处理、可选 Bearer 校验、全部路由、可选静态前端与 CORS。
+ *
+ * 没有用户/角色体系：`INTERNAL_TOKEN` 设置后才对所有 `/api/*` 校验一个共享 Bearer
+ * 令牌；默认只监听 127.0.0.1（由业务后端调用）。
+ */
 import fs from 'node:fs'
 import path from 'node:path'
+import { timingSafeEqual } from 'node:crypto'
+import Fastify, { type FastifyInstance } from 'fastify'
+import type { AppContext } from './context.js'
+import { ApiError, registerErrorHandler } from './http/errors.js'
+import { registerConversationRoutes } from './api/conversations.js'
+import { registerHealthRoutes } from './api/health.js'
+import { registerMcpRoutes } from './api/mcp.js'
+import { registerProjectRoutes } from './api/projects.js'
+import { registerSkillRoutes } from './api/skills.js'
 
 interface FastifyPluginLike {
   default: (instance: FastifyInstance, options?: Record<string, unknown>) => Promise<void>
 }
 
-async function registerCors(app: FastifyInstance, logger: AppContext['logger']): Promise<void> {
+async function registerCors(app: FastifyInstance, origins: string[], logger: AppContext['logger']): Promise<void> {
+  if (origins.length === 0) return
   try {
-    // 动态导入：CORS 只是浏览器开发便利，不应阻塞网关启动。
-    const moduleName = '@fastify/cors'
-    const plugin = (await import(moduleName)) as FastifyPluginLike
-    await app.register(plugin.default, { origin: true })
+    const plugin = (await import('@fastify/cors')) as unknown as FastifyPluginLike
+    await app.register(plugin.default, { origin: origins })
+    logger.info('cors enabled', { origins })
   } catch (error) {
-    logger.warn('CORS plugin unavailable; skipping', error)
+    logger.warn('CORS plugin unavailable; browsers will be same-origin only', error)
   }
 }
 
-async function registerStatic(app: FastifyInstance, webDist: string | undefined, logger: AppContext['logger']): Promise<void> {
+async function registerStatic(
+  app: FastifyInstance,
+  webDist: string | undefined,
+  logger: AppContext['logger'],
+): Promise<void> {
   if (webDist === undefined || !fs.existsSync(webDist)) return
   try {
-    const moduleName = '@fastify/static'
-    const plugin = (await import(moduleName)) as FastifyPluginLike
+    const plugin = (await import('@fastify/static')) as unknown as FastifyPluginLike
     await app.register(plugin.default, { root: webDist, prefix: '/' })
     logger.info('serving web console from disk', { webDist })
   } catch (error) {
     logger.warn('static plugin unavailable; skipping web console hosting', error)
   }
+}
+
+/** Bearer 校验：长度不同直接失败，避免 timingSafeEqual 抛错。 */
+function bearerMatches(header: string | undefined, expected: string): boolean {
+  const match = /^Bearer\s+(.+)$/i.exec(header ?? '')
+  if (match === null) return false
+  const provided = Buffer.from(match[1] ?? '', 'utf8')
+  const target = Buffer.from(expected, 'utf8')
+  if (provided.length !== target.length) return false
+  return timingSafeEqual(provided, target)
 }
 
 export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
@@ -48,29 +63,31 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
     trustProxy: false,
   })
 
-  // 前端是 history 路由的 SPA：非 /api 的页面请求回退到 index.html，
-  // 直接访问 /agents/:id/edit 或刷新聊天页才不会 404。
+  // 前端是 history 路由的 SPA：非 /api 的页面请求回退到 index.html。
   const spaIndex =
     ctx.config.webDist !== undefined && fs.existsSync(path.join(ctx.config.webDist, 'index.html'))
       ? path.join(ctx.config.webDist, 'index.html')
       : undefined
   registerErrorHandler(app, ctx.logger, spaIndex === undefined ? {} : { spaIndex })
-  const guards = createAuthGuards({
-    users: ctx.repos.users,
-    secret: ctx.config.authSecret,
-    logger: ctx.logger,
-  })
+
+  if (ctx.config.internalToken !== undefined) {
+    const expected = ctx.config.internalToken
+    app.addHook('onRequest', async (request) => {
+      if (!request.url.startsWith('/api/')) return
+      if (!bearerMatches(request.headers.authorization, expected)) {
+        throw new ApiError('SERVICE_TOKEN_INVALID', '缺少或错误的 Bearer token')
+      }
+    })
+    ctx.logger.info('internal token enabled for /api/*')
+  }
 
   registerHealthRoutes(app, ctx)
-  registerAuthRoutes(app, ctx, guards)
-  registerAgentRoutes(app, ctx, guards)
-  registerSessionRoutes(app, ctx, guards)
-  registerApprovalRoutes(app, ctx, guards)
-  registerMcpRoutes(app, ctx, guards)
-  registerAuditRoutes(app, ctx, guards)
-  registerRuntimeRoutes(app, ctx, guards)
+  registerSkillRoutes(app, ctx)
+  registerMcpRoutes(app, ctx)
+  registerProjectRoutes(app, ctx)
+  registerConversationRoutes(app, ctx)
 
-  await registerCors(app, ctx.logger)
+  await registerCors(app, ctx.config.corsOrigins, ctx.logger)
   await registerStatic(app, ctx.config.webDist, ctx.logger)
   return app
 }

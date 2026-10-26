@@ -16,6 +16,9 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 data/.auth-secret
+data/conversations/
+data/store.json
+runtime/snapshots/
 runtime/homes/
 runtime/workspaces/
 runtime/patches/

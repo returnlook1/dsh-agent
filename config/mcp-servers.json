@@ -1,0 +1,29 @@
+{
+  "servers": [
+    {
+      "id": "data-center",
+      "name": "数据中心",
+      "description": "海洋与环境数据集目录、元信息与流场摘要（示例 MCP 服务器，离线可运行）",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["${REPO_ROOT}/scripts/mcp-data-center-server.mjs"],
+      "env": {},
+      "toolCallTimeoutMs": 30000,
+      "failOnStartup": false,
+      "enabled": true
+    },
+    {
+      "id": "gis-service",
+      "name": "GIS 服务",
+      "description": "占位示例：真实的 GIS MCP 服务请替换 url 或 command 后启用",
+      "transport": "streamable-http",
+      "url": "http://127.0.0.1:9100/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GIS_SERVICE_TOKEN}"
+      },
+      "toolCallTimeoutMs": 30000,
+      "failOnStartup": false,
+      "enabled": false
+    }
+  ]
+}
