@@ -66,16 +66,23 @@ npm start
 
 ![初始状态：能力面板 + 任务控制台式空状态](docs/images/ui-empty.png)
 
-![对话中：消息流、工具调用卡片、会话元信息](docs/images/ui-chat.png)
+![对话中：Markdown 回答、能力摘要、工具调用卡片](docs/images/ui-chat.png)
 
-- **左栏**：新建对话（主操作）· 历史会话（状态 / 消息数 / 相对时间）· 当前对话的
+- **左栏**：新建对话（主操作）· 历史会话（搜索标题/ID/项目，按状态筛选）· 当前对话的
   conversationId / sessionId / 配置快照入口；
-- **中间**：会话标题与路由（来自 DSH）、消息流（用户=琥珀、助手=青）、工具调用卡片
-  （参数 / 耗时 / 结构化结果）、固定输入区；
+- **中间**：会话标题 + 路由 + **能力摘要条**（本轮启用的 Skills / MCP），消息流
+  （用户=琥珀、助手=青，**Markdown 渲染**：标题/列表/表格/代码块），工具调用卡片
+  （参数 / 耗时 / 结构化结果），固定输入区；
 - **右栏**：项目、Skills、MCP（每行可「测试」并预览工具）、Provider / Model（候选项与默认值
   来自 DSH）、系统提示词、保存为项目默认；
+- 窄屏（<1280）收起右栏、<1024 收起左栏，顶栏按钮切换；见 `docs/images/ui-narrow.png`。
+
+![窄屏布局](docs/images/ui-narrow.png)
+
 - 主题：`body[theme-mode="dark"]` + Semi 暗色 token 覆写，全部样式集中在
-  `apps/web/src/styles/global.css`。## 2. 两级能力配置
+  `apps/web/src/styles/global.css`；
+- Markdown 安全约束：`marked` 渲染时关闭原始 HTML、链接协议白名单（http/https/mailto/tel/
+  相对路径），`javascript:` 等降级为纯文本；实现与单测见 `apps/web/src/utils/markdown.ts`。## 2. 两级能力配置
 
 | 层级 | 存在哪里 | 作用 |
 | --- | --- | --- |

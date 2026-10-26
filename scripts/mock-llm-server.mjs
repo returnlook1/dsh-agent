@@ -46,6 +46,7 @@ const toolArguments =
   typeof args.args === 'string' ? args.args : '{"stationId":"ST-3101","days":7}'
 
 const { startMockLlmServer } = await import('@deepseek-ai/dsh-llm-mock-server')
+const { DEMO_ANSWER_MARKDOWN } = await import('./demo-answer.mjs')
 
 const server = await startMockLlmServer({
   host,
@@ -53,7 +54,7 @@ const server = await startMockLlmServer({
   apiKey: process.env.MOCK_LLM_API_KEY,
   sequence: ['tool_call_success', 'success'],
   repeatLast: true,
-  successText: '查询完成：ST-3101 最近 7 天溶解氧均值 7.1 mg/L，水质类别为 II 类。',
+  successText: DEMO_ANSWER_MARKDOWN,
   toolName,
   toolArguments,
 })

@@ -313,3 +313,15 @@ Vue 把它当成原生 `<select>` 渲染（白底空白框）。补上导入后�
 
 验证：用 Edge headless（CDP）在 1488×824 与 1120×800 下截图核对；typecheck / 211 单测 /
 12 项运行时检查 / 73 项 e2e 全绿。截图见 `docs/images/`。
+### 13.1 后续三项打磨
+
+1. **Markdown 渲染**：接入 `marked`（gfm + breaks），但关闭原始 HTML、链接/图片协议走白名单
+   （http/https/mailto/tel/相对路径），`javascript:`/`data:` 降级为纯文本；代码块不引入高亮库，
+   只加语言标签（体积换不来收益）。安全用例在 `apps/web/tests/markdown.test.ts`。
+2. **会话搜索与状态筛选**：搜索标题/ID/项目，状态筛选带计数；计数为 0 的状态不展示。
+   过滤逻辑抽成 `utils/conversation-filter.ts` 纯函数，有 7 个单测。
+3. **能力摘要条**：对话标题下直接显示本轮启用的 Skills / MCP（超出用 `+N` 表示），
+   悬停看全量；避免"以为没挂技能"的误判。
+
+演示用的 mock 回答也改成一段带标题/列表/表格/代码块的 Markdown（`scripts/demo-answer.mjs`），
+这样离线 `npm run demo` 就能看到渲染效果。

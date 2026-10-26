@@ -59,6 +59,35 @@ const modelLabel = computed(() => {
   return config === undefined ? '' : `${config.provider} / ${config.model}`
 })
 
+/** 标题下的能力摘要：只展示前几项，其余用 +N 表示（悬停看全量）。 */
+const CAP_PREVIEW = 3
+const capabilityChips = computed(() => {
+  const config = current.value?.config
+  if (config === undefined) return []
+  const chips: Array<{ key: string; label: string; kind: 'skill' | 'mcp' | 'more' }> = []
+  for (const name of config.skills.slice(0, CAP_PREVIEW)) {
+    chips.push({ key: `skill:${name}`, label: name, kind: 'skill' })
+  }
+  if (config.skills.length > CAP_PREVIEW) {
+    chips.push({ key: 'skill:more', label: `+${config.skills.length - CAP_PREVIEW} skills`, kind: 'more' })
+  }
+  for (const name of config.mcpServers.slice(0, CAP_PREVIEW)) {
+    chips.push({ key: `mcp:${name}`, label: name, kind: 'mcp' })
+  }
+  if (config.mcpServers.length > CAP_PREVIEW) {
+    chips.push({ key: 'mcp:more', label: `+${config.mcpServers.length - CAP_PREVIEW} mcp`, kind: 'more' })
+  }
+  return chips
+})
+
+const capabilityHint = computed(() => {
+  const config = current.value?.config
+  if (config === undefined) return ''
+  const skills = config.skills.length === 0 ? '无 Skills' : `Skills: ${config.skills.join(', ')}`
+  const mcp = config.mcpServers.length === 0 ? '无 MCP' : `MCP: ${config.mcpServers.join(', ')}`
+  return `${skills} · ${mcp}`
+})
+
 async function scrollToBottom(): Promise<void> {
   await nextTick()
   const element = scroller.value
@@ -210,6 +239,18 @@ async function removeCurrent(): Promise<void> {
           <span>{{ subtitle }}</span>
           <span v-if="modelLabel.length > 0" class="chat-panel__route">{{ modelLabel }}</span>
         </p>
+        <div v-if="current !== null" class="cap-strip" :title="capabilityHint">
+          <span class="cap-strip__label">caps</span>
+          <span
+            v-for="chip in capabilityChips"
+            :key="chip.key"
+            class="cap-chip"
+            :class="`cap-chip--${chip.kind}`"
+          >
+            {{ chip.label }}
+          </span>
+          <span v-if="capabilityChips.length === 0" class="cap-chip cap-chip--none">未启用 Skills / MCP</span>
+        </div>
       </div>
       <div class="chat-panel__actions">
         <Button

@@ -12,6 +12,7 @@
  * 生产部署请直接用 `npm start`，不要用这个脚本（它会起 mock 模型）。
  */
 import { existsSync } from 'node:fs'
+import { DEMO_ANSWER_MARKDOWN } from './demo-answer.mjs'
 import path from 'node:path'
 import process from 'node:process'
 import { spawn } from 'node:child_process'
@@ -92,7 +93,7 @@ if (live) {
     // 每个进程只脚本化"一次工具调用 + 一段结论"；之后的轮次只返回文本
     sequence: ['tool_call_success', 'success'],
     repeatLast: true,
-    successText: '已完成。这是一段来自本地 mock 模型的示例回答。',
+    successText: DEMO_ANSWER_MARKDOWN,
     // 默认演示「技能加载」：项目默认配置里已经选中了这些技能（见下面的种子数据）
     toolName: 'skill',
     toolArguments: JSON.stringify({ name: 'netcdf-analysis' }),
