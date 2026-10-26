@@ -97,8 +97,13 @@ export class ModelCatalogService {
   defaultRouteStrict(errors: { unavailable: (message: string) => Error }): ResolvedRoute {
     const catalog = this.current
     if (catalog === undefined || !hasUsableRoute(catalog)) {
+      // 把"DSH 配了默认模型但运行时没有"的原因一并带出去（否则只看到"没有可用模型"）。
+      const preferredHint =
+        catalog?.preferredUnavailable === undefined
+          ? ''
+          : `；DSH 配置的默认模型 ${catalog.preferredUnavailable.provider} / ${catalog.preferredUnavailable.model} 不可用：${catalog.preferredUnavailable.reason}`
       throw errors.unavailable(
-        `DSH 没有提供可用的 provider/model${catalog?.error === undefined ? '' : `（${catalog.error}）`}`,
+        `DSH 没有提供可用的 provider/model${catalog?.error === undefined ? '' : `（${catalog.error}）`}${preferredHint}`,
       )
     }
     const preferred = this.deps.preferredRoute?.()
