@@ -3,6 +3,7 @@
  */
 import type { GatewayConfig } from './config.js'
 import type { Logger } from './logger.js'
+import type { CapabilityFiles } from './capabilities/CapabilityFiles.js'
 import type { DshSource } from './dsh/DshSource.js'
 import type { McpConfig } from './mcp/McpConfig.js'
 import type { ModelCatalogService } from './models/ModelCatalogService.js'
@@ -22,6 +23,8 @@ export interface AppContext {
   catalog: SkillCatalog
   skills: SkillSource
   mcp: McpConfig
+  /** Skill / MCP 的来源查询与在线增改。 */
+  capabilities: CapabilityFiles
   /** 既有 DSH 配置来源（未启用时 enabled=false）。 */
   dshSource: DshSource
   /** 模型清单（从 DSH 发现，带缓存）。 */

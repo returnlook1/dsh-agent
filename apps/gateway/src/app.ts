@@ -11,6 +11,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import type { AppContext } from './context.js'
 import { ApiError, registerErrorHandler } from './http/errors.js'
 import { registerConversationRoutes } from './api/conversations.js'
+import { registerCapabilityRoutes } from './api/capabilities.js'
 import { registerHealthRoutes } from './api/health.js'
 import { registerMcpRoutes } from './api/mcp.js'
 import { registerModelRoutes } from './api/models.js'
@@ -84,6 +85,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
 
   registerHealthRoutes(app, ctx)
   registerSkillRoutes(app, ctx)
+  registerCapabilityRoutes(app, ctx)
   registerMcpRoutes(app, ctx)
   registerModelRoutes(app, ctx)
   registerProjectRoutes(app, ctx)

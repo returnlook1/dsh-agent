@@ -69,6 +69,16 @@ const routeProvider = computed(() => {
   return config.dshRoute.provider.length > 0 ? config.dshRoute.provider : 'route'
 })
 
+/** 唤起 DSH 桌面端：自定义协议由 DSH 安装时注册（默认 dsh://open）。 */
+const dshDeepLink = computed(() => config.dshApp?.deepLink ?? 'dsh://open')
+const dshOffline = computed(() => {
+  const app = config.dshApp
+  return app !== null && app.guiUrl.trim().length > 0 && !app.guiReachable
+})
+const dshHint = computed(
+  () => config.dshApp?.hint ?? '通过 dsh://open 唤起 DeepSeek Harness；模型、Provider、凭据都在 DSH 里配置。',
+)
+
 const routeModel = computed(() => {
   const snapshot = conversation.current?.config
   if (snapshot !== undefined && snapshot.model.length > 0) return snapshot.model
@@ -108,6 +118,8 @@ onMounted(() => {
   ui.startHealthPolling()
   void config.loadCatalogs()
   void config.loadProjectConfig()
+  void config.loadDshApp()
+  void config.loadCapabilitySources()
   void conversation.loadHistory(historyProjectId())
 })
 
@@ -248,6 +260,10 @@ function refreshHistory(): void {
       <div class="topbar__spacer" />
 
       <div class="topbar__group">
+        <a class="chip chip--dsh" :href="dshDeepLink" :title="dshHint">
+          <span class="chip__dot" :class="{ 'is-off': dshOffline }" aria-hidden="true" />
+          <span class="chip__value">打开 DSH</span>
+        </a>
         <StatusBadge :tone="healthTone" :label="healthLabel" :hint="healthHint" />
         <Button v-if="ui.health === 'offline'" size="small" theme="borderless" @click="ui.checkHealth()">
           重试

@@ -2,6 +2,7 @@
 import { Banner, Button, Input, Select, Spin, Tag, TextArea, Typography } from '@aifuxi/semi-ui-vue'
 import { computed, ref } from 'vue'
 
+import CapabilitySources from '@/components/CapabilitySources.vue'
 import McpSelect from '@/components/McpSelect.vue'
 import SkillSelect from '@/components/SkillSelect.vue'
 import { useConfigStore } from '@/stores/config'
@@ -238,6 +239,8 @@ async function refreshModels(): Promise<void> {
         />
         <p v-else class="field__hint">{{ promptSummary }}</p>
       </div>
+
+      <CapabilitySources />
 
       <div class="config-actions">
         <Button

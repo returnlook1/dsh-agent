@@ -93,6 +93,9 @@ runtime/snapshots/<configKey>/
 | `DSH_SOURCE_PROFILE` | `desktop` | 源 profile 名（CLI 拒绝 dump `desktop`，服务会复制成临时导入 profile 再 dump） |
 | `DSH_SOURCE_IMPORT_PROVIDERS` | `on` | 是否把源组合里的 provider 插件导入运行时 |
 | `DSH_SOURCE_IMPORT_MCP` | `on` | 是否把源组合里的 MCP 服务器定义导入能力清单 |
+| `DSH_DEEP_LINK` | `dsh://open` | 唤起 DSH 桌面端的自定义协议（顶栏按钮） |
+| `DSH_GUI_URL` | `http://127.0.0.1:7857` | DSH 网页端地址（仅做可达性探测） |
+| `AGENT_SERVICE_ALLOW_LOCAL_ACTIONS` | `on` | 是否允许打开目录/配置文件、在线新建技能、改 MCP 定义 |
 | `MAX_RUNTIMES` | `8` | 运行时上限（超出先回收最久空闲） |
 | `CORS_ORIGINS` | – | 逗号分隔的允许来源；默认同源 |
 | `WEB_DIST` | `<repo>/apps/web/dist` | 测试页面产物 |
@@ -174,6 +177,20 @@ provider 由 Cordis 插件在运行时注册，模型目录由 adapter 提供（
 - 已验证：用真实 `~/.dsh`（desktop）导入后，运行时能正常启动并完成一轮对话；
   导入的第三方 provider 是否注册出模型取决于它依赖的服务是否齐备（见 `docs/VERIFICATION.md` §6）。
 
+### 3.2d 能力管理（Skill / MCP）
+
+| 动作 | 实现 | 热加载 |
+| --- | --- | --- |
+| 新建技能 | 写 `<可写根>/<name>/SKILL.md`（frontmatter: name/description/whenToUse + 正文） | ✅ 按 mtime 扫描 |
+| 删除技能 | 只允许可写根目录下的目录形态技能 | ✅ |
+| 新增/修改 MCP | 合并写回 `MCP_CONFIG`（临时文件 + rename） | ✅ 按 mtime 缓存 |
+| 删除 MCP | 只删本地配置文件条目；DSH Profile 导入的只读 | ✅ |
+| 打开目录/配置文件 | `explorer` / `open` / `xdg-open`（路径由配置给出，不接受请求传参） | – |
+
+约束：写操作只落在 `SKILLS_DIRS` 与 `MCP_CONFIG`；名字/ID 走白名单；共享部署用
+`AGENT_SERVICE_ALLOW_LOCAL_ACTIONS=off` 关闭这些动作（403 `LOCAL_ACTIONS_DISABLED`）。
+凭据必须以 `${ENV_NAME}` 引用写入，服务不会把真实值落盘。
+
 ### 3.3 技能目录
 
 ```
@@ -239,13 +256,20 @@ whenToUse: 需要读取 .nc 文件、计算流场或查看变量维度时
 ## 7. HTTP API
 
 统一前缀 `/api`。错误：`{ error: { code, message, details? } }`，code 用
-`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | MODEL_UNKNOWN | MODEL_UNAVAILABLE | SESSION_RESTORE_FAILED | RUNTIME_BUSY | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
+`VALIDATION_ERROR | NOT_FOUND | CONFLICT | SKILL_UNKNOWN | MCP_UNKNOWN | MODEL_UNKNOWN | MODEL_UNAVAILABLE | SESSION_RESTORE_FAILED | RUNTIME_BUSY | LOCAL_ACTIONS_DISABLED | RUNTIME_ERROR | SERVICE_TOKEN_INVALID | INTERNAL_ERROR`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | `{ ok, version, dshVersion, runtimes, uptimeSec }` |
 | GET | `/api/models` | **从 DSH 读取**的 provider / model 清单与默认路由（只读；`?refresh=1` 重新探测） |
 | GET | `/api/skills` | 可用技能清单 |
+| GET | `/api/capabilities/sources` | 技能根目录 / MCP 配置路径 / 本地动作开关（能力来源面板） |
+| POST | `/api/capabilities/reveal` | 在资源管理器打开技能目录或 MCP 配置文件（仅本机） |
+| POST | `/api/skills` | 新建技能（写 `<root>/<name>/SKILL.md`，201） |
+| DELETE | `/api/skills/:name` | 删除可写目录下的技能（204） |
+| PUT | `/api/mcp-servers/:id` | 新增/修改 MCP 定义（写回 `config/mcp-servers.json`） |
+| DELETE | `/api/mcp-servers/:id` | 删除本地 MCP 定义（不影响 DSH Profile 导入的条目） |
+| GET | `/api/dsh-app` | 唤起 DSH 桌面端的深链 + 网页端可达性 |
 | GET | `/api/mcp-servers` | 可用 MCP 服务器（含 `source: config | dsh-profile`） |
 | POST | `/api/mcp-servers/:id/test` | MCP 连接测试（握手 + `tools/list`），body 可带 `timeoutMs` |
 | GET | `/api/mcp-servers/:id/tools` | MCP 工具清单（同样走一次探测） |

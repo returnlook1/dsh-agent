@@ -2453,3 +2453,166 @@ pre,
   font-size: 11.5px;
   color: var(--txt-3);
 }
+/* ---------------------------------------------------------- 打开 DSH chip */
+
+.chip--dsh {
+  border-color: var(--teal-line);
+  background: linear-gradient(180deg, rgba(67, 224, 192, 0.12), rgba(67, 224, 192, 0.04));
+  color: var(--teal-bright);
+  text-decoration: none;
+}
+
+.chip--dsh:hover {
+  border-color: rgba(67, 224, 192, 0.55);
+  background: rgba(67, 224, 192, 0.18);
+}
+
+.chip--dsh .chip__kicker {
+  color: rgba(67, 224, 192, 0.7);
+}
+
+.chip--dsh .chip__value {
+  color: var(--teal-bright);
+  font-family: var(--font-body);
+}
+
+.chip__dot.is-off {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(242, 180, 94, 0.16);
+}
+
+/* -------------------------------------------------------- 能力来源面板 */
+
+.source-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(6, 13, 22, 0.55);
+}
+
+.source-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-panel__title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt-1);
+  margin-top: 2px;
+}
+
+.source-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.source-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.source-block__label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--txt-2);
+}
+
+.source-block__actions {
+  display: flex;
+  gap: 2px;
+}
+
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(4, 10, 18, 0.5);
+}
+
+.source-row__main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.source-row__name {
+  font-size: 11.5px;
+  color: var(--txt-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-row__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--txt-3);
+}
+
+.source-row__path {
+  display: block;
+  font-size: 10px;
+  color: var(--txt-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-row__side {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog-form__label {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+}
+
+.dialog-form .semi-input-wrapper,
+.dialog-form .semi-select,
+.dialog-form .semi-input-textarea-wrapper {
+  width: 100%;
+}
+/* 占位符要明显弱于真实输入值 */
+.semi-input::placeholder,
+.semi-input-textarea::placeholder {
+  color: var(--txt-3) !important;
+  opacity: 0.75;
+}

@@ -6,6 +6,10 @@
  * 业务代码扩散 `any`；调用方拿到的永远是共享契约里的类型。
  */
 import type {
+  CapabilitySkillRoot,
+  CapabilitySourcesResponse,
+  CreateSkillRequest,
+  DshAppResponse,
   ModelCatalogResponse,
   ModelCatalogSource,
   ModelOption,
@@ -28,6 +32,7 @@ import type {
   SkillSummaryDto,
   StopConversationResponse,
   ToolCallRecord,
+  UpsertMcpServerRequest,
 } from '@agent-studio/shared'
 
 import { uniqueStrings } from '../constants'
@@ -812,4 +817,97 @@ export async function openMessageStream(
     )
   }
   return response.body
+}
+
+/* ------------------------------------------------------- 能力来源与本地动作 */
+
+/** `GET /api/capabilities/sources` —— 技能根目录 / MCP 配置 / 本地动作开关。 */
+export function parseCapabilitySources(value: unknown): CapabilitySourcesResponse {
+  const record = asRecord(value)
+  if (record === null) throw contractError('能力来源响应不是对象')
+  const skillsRaw = asRecord(record['skills']) ?? {}
+  const rootsRaw = asUnknownArray(skillsRaw['roots']) ?? []
+  const roots: CapabilitySkillRoot[] = []
+  for (const item of rootsRaw) {
+    const root = asRecord(item)
+    if (root === null) continue
+    const rootPath = readString(root, 'path')
+    if (rootPath === null) continue
+    roots.push({
+      path: rootPath,
+      source: parseSkillSource(root['source']),
+      label: readString(root, 'label') ?? rootPath,
+      count: readOptionalNumber(root, 'count') ?? 0,
+      writable: root['writable'] === true,
+    })
+  }
+  const mcpRaw = asRecord(record['mcp']) ?? {}
+  const actionsRaw = asRecord(record['actions']) ?? {}
+  const writableRoot = readOptionalString(skillsRaw, 'writableRoot')
+  const dshSource = readOptionalString(mcpRaw, 'dshSource')
+  return {
+    skills: {
+      roots,
+      total: readOptionalNumber(skillsRaw, 'total') ?? roots.reduce((sum, root) => sum + root.count, 0),
+      ...(writableRoot === undefined ? {} : { writableRoot }),
+    },
+    mcp: {
+      configPath: readString(mcpRaw, 'configPath') ?? '',
+      exists: mcpRaw['exists'] === true,
+      localCount: readOptionalNumber(mcpRaw, 'localCount') ?? 0,
+      ...(dshSource === undefined ? {} : { dshSource }),
+    },
+    actions: {
+      enabled: actionsRaw['enabled'] === true,
+      reveal: actionsRaw['reveal'] === true,
+    },
+  }
+}
+
+export async function getCapabilitySources(): Promise<CapabilitySourcesResponse> {
+  return parseCapabilitySources(await requestJson('/capabilities/sources'))
+}
+
+/** `POST /api/skills` —— 新建技能（写 SKILL.md）。 */
+export async function createSkill(input: CreateSkillRequest): Promise<SkillSummaryDto> {
+  const value = asRecord(await requestJson('/skills', { method: 'POST', body: input }))
+  const skill = asRecord(value?.['skill'])
+  if (skill === null) throw contractError('新建技能响应缺少 skill')
+  return parseSkill(skill)
+}
+
+/** `DELETE /api/skills/:name` */
+export async function deleteSkill(name: string): Promise<void> {
+  await requestJson(`/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}
+
+/** `PUT /api/mcp-servers/:id` —— 新增/修改 MCP 定义。 */
+export async function saveMcpServer(id: string, input: UpsertMcpServerRequest): Promise<void> {
+  await requestJson(`/mcp-servers/${encodeURIComponent(id)}`, { method: 'PUT', body: input })
+}
+
+/** `DELETE /api/mcp-servers/:id` */
+export async function deleteMcpServer(id: string): Promise<void> {
+  await requestJson(`/mcp-servers/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** `POST /api/capabilities/reveal` —— 在资源管理器打开目录/文件（仅本机）。 */
+export async function revealCapability(target: 'skills' | 'mcp'): Promise<{ opened: string }> {
+  const value = asRecord(await requestJson('/capabilities/reveal', { method: 'POST', body: { target } }))
+  if (value === null) throw contractError('打开目录响应不是对象')
+  return { opened: readString(value, 'opened') ?? '' }
+}
+
+/** `GET /api/dsh-app` —— 唤起 DSH 桌面端的深链 + 网页端可达性。 */
+export async function getDshApp(): Promise<DshAppResponse> {
+  const record = asRecord(await requestJson('/dsh-app'))
+  if (record === null) throw contractError('DSH 状态响应不是对象')
+  const hint = readOptionalString(record, 'hint')
+  return {
+    deepLink: readString(record, 'deepLink') ?? 'dsh://open',
+    guiUrl: readString(record, 'guiUrl') ?? '',
+    guiReachable: record['guiReachable'] === true,
+    checkedAt: readOptionalNumber(record, 'checkedAt') ?? 0,
+    ...(hint === undefined ? {} : { hint }),
+  }
 }

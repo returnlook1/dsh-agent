@@ -8,6 +8,9 @@
 import type {
   AgentConfig,
   AgentConfigPatch,
+  CapabilitySourcesResponse,
+  CreateSkillRequest,
+  DshAppResponse,
   McpProbeResponse,
   McpServerSummaryDto,
   ModelCatalogResponse,
@@ -21,15 +24,21 @@ import { computed, ref } from 'vue'
 
 import { uniqueStrings } from '../constants'
 import {
+  createSkill as apiCreateSkill,
+  deleteMcpServer as apiDeleteMcpServer,
   describeApiError,
   describeMcpProbeError,
   describeMcpProbeFailure,
+  getCapabilitySources,
+  getDshApp,
   getMcpServers,
   getMcpServerTools,
   getModels,
   getProjectAgentConfig,
   getSkills,
   putProjectAgentConfig,
+  revealCapability as apiRevealCapability,
+  saveMcpServer as apiSaveMcpServer,
   testMcpServer,
 } from '../services/agent-api'
 
@@ -73,6 +82,15 @@ export const useConfigStore = defineStore('config', () => {
   const systemPrompt = ref('')
 
   const projectConfig = ref<ProjectAgentConfigDto | null>(null)
+
+  /** 技能根目录 / MCP 配置来源（"能力来源"面板）。 */
+  const capabilitySources = ref<CapabilitySourcesResponse | null>(null)
+  const sourcesLoading = ref(false)
+  const sourcesError = ref<string | null>(null)
+
+  /** DSH 桌面端唤起信息（深链 + 网页端可达性）。 */
+  const dshApp = ref<DshAppResponse | null>(null)
+  const dshAppLoading = ref(false)
 
   const catalogsLoading = ref(false)
   const configLoading = ref(false)
@@ -373,6 +391,91 @@ export const useConfigStore = defineStore('config', () => {
     catalogError.value = null
   }
 
+  /* ------------------------------------------------ 能力来源 / 在线管理 */
+
+  /** 加载技能根目录与 MCP 配置来源。 */
+  async function loadCapabilitySources(): Promise<void> {
+    sourcesLoading.value = true
+    sourcesError.value = null
+    try {
+      capabilitySources.value = await getCapabilitySources()
+    } catch (error) {
+      sourcesError.value = describeApiError(error)
+    } finally {
+      sourcesLoading.value = false
+    }
+  }
+
+  /** 加载 DSH 唤起信息（深链 + 网页端可达性）。 */
+  async function loadDshApp(): Promise<void> {
+    dshAppLoading.value = true
+    try {
+      dshApp.value = await getDshApp()
+    } catch {
+      dshApp.value = null
+    } finally {
+      dshAppLoading.value = false
+    }
+  }
+
+  /** 新建技能；成功后刷新技能清单与来源统计。 */
+  async function createSkill(input: CreateSkillRequest): Promise<SkillSummaryDto | null> {
+    sourcesError.value = null
+    try {
+      const skill = await apiCreateSkill(input)
+      await loadCatalogs()
+      await loadCapabilitySources()
+      selectedSkills.value = uniqueStrings([...selectedSkills.value, skill.name])
+      return skill
+    } catch (error) {
+      sourcesError.value = `新建技能失败：${describeApiError(error)}`
+      return null
+    }
+  }
+
+  /** 新增/修改 MCP 定义；成功后刷新 MCP 清单。 */
+  async function saveMcpServer(
+    id: string,
+    input: Parameters<typeof apiSaveMcpServer>[1],
+  ): Promise<boolean> {
+    sourcesError.value = null
+    try {
+      await apiSaveMcpServer(id, input)
+      await loadCatalogs()
+      await loadCapabilitySources()
+      return true
+    } catch (error) {
+      sourcesError.value = `保存 MCP 服务器失败：${describeApiError(error)}`
+      return false
+    }
+  }
+
+  /** 删除本地 MCP 定义。 */
+  async function removeMcpServer(id: string): Promise<boolean> {
+    sourcesError.value = null
+    try {
+      await apiDeleteMcpServer(id)
+      selectedMcpServers.value = selectedMcpServers.value.filter((item) => item !== id)
+      await loadCatalogs()
+      await loadCapabilitySources()
+      return true
+    } catch (error) {
+      sourcesError.value = `删除 MCP 服务器失败：${describeApiError(error)}`
+      return false
+    }
+  }
+
+  /** 在资源管理器打开技能目录 / MCP 配置文件。 */
+  async function revealCapability(target: 'skills' | 'mcp'): Promise<boolean> {
+    try {
+      await apiRevealCapability(target)
+      return true
+    } catch (error) {
+      sourcesError.value = `打开失败：${describeApiError(error)}`
+      return false
+    }
+  }
+
   return {
     projectId,
     skills,
@@ -406,6 +509,11 @@ export const useConfigStore = defineStore('config', () => {
     saving,
     catalogError,
     configError,
+    capabilitySources,
+    sourcesLoading,
+    sourcesError,
+    dshApp,
+    dshAppLoading,
     loadCatalogs,
     loadProjectConfig,
     saveProjectConfig,
@@ -414,5 +522,11 @@ export const useConfigStore = defineStore('config', () => {
     clearSkills,
     clearConfigError,
     clearCatalogError,
+    loadCapabilitySources,
+    loadDshApp,
+    createSkill,
+    saveMcpServer,
+    removeMcpServer,
+    revealCapability,
   }
 })

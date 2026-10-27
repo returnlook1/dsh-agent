@@ -9,6 +9,7 @@
  * 服务本身不做租户与权限管理（见 docs/SERVICE.md §1）。
  */
 export * from './agent-config.js'
+export * from './capabilities.js'
 export * from './conversation.js'
 export * from './events.js'
 export * from './inventory.js'

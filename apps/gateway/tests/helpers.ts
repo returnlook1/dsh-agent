@@ -342,6 +342,8 @@ export interface HarnessOptions {
   skipTemplate?: boolean
   /** 覆盖测试用模型清单（默认只有 deepseek-official 两个模型）。 */
   providers?: ProviderOption[]
+  /** 其它配置覆盖（例如 allowLocalActions）。 */
+  overrides?: Partial<GatewayConfig>
 }
 
 export interface TestHarness {
@@ -377,6 +379,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<TestH
       ...(options.runtimeIdleMs === undefined ? {} : { runtimeIdleMs: options.runtimeIdleMs }),
       ...(options.maxRuntimes === undefined ? {} : { maxRuntimes: options.maxRuntimes }),
       ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
+      ...options.overrides,
     },
   })
 

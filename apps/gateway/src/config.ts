@@ -57,6 +57,12 @@ export interface GatewayConfig {
   dshSourceWorkDir: string
   /** 模型清单磁盘缓存（`<DATA_DIR>/models.json`）。 */
   modelsCachePath: string
+  /** 唤起 DSH 桌面端的自定义协议（默认 `dsh://open`）。 */
+  dshDeepLink: string
+  /** DSH 网页端地址（桌面端注入凭据，直接打开通常 401，仅做可达性探测）。 */
+  dshGuiUrl: string
+  /** 是否允许"打开目录 / 写技能 / 改 MCP 配置"等本地动作。 */
+  allowLocalActions: boolean
   /** 探针插件入口（默认 gateway 构建产物；测试可覆盖）。 */
   modelProbePlugin: string
   runtimeIdleMs: number
@@ -154,6 +160,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, repoRoot: strin
     mockLlm,
     modelDiscovery: (envString(env, 'AGENT_SERVICE_MODEL_DISCOVERY', 'on') as string).toLowerCase() !== 'off',
     modelsCachePath: path.join(dataDir, 'models.json'),
+    dshDeepLink: envString(env, 'DSH_DEEP_LINK', 'dsh://open') as string,
+    dshGuiUrl: envString(env, 'DSH_GUI_URL', '') as string,
+    allowLocalActions: (envString(env, 'AGENT_SERVICE_ALLOW_LOCAL_ACTIONS', 'on') as string).toLowerCase() !== 'off',
     dshSourceHome: envString(env, 'DSH_SOURCE_HOME', undefined),
     dshSourceProfile: envString(env, 'DSH_SOURCE_PROFILE', 'desktop') as string,
     dshSourceImportProviders: (envString(env, 'DSH_SOURCE_IMPORT_PROVIDERS', 'on') as string).toLowerCase() !== 'off',
@@ -200,6 +209,9 @@ export function describeConfig(config: GatewayConfig): Record<string, unknown> {
     mockLlm: config.mockLlm !== undefined,
     modelDiscovery: config.modelDiscovery,
     modelsCachePath: config.modelsCachePath,
+    dshDeepLink: config.dshDeepLink,
+    dshGuiUrl: config.dshGuiUrl,
+    allowLocalActions: config.allowLocalActions,
     dshSourceHome: config.dshSourceHome ?? '[disabled]',
     dshSourceProfile: config.dshSourceImportProviders || config.dshSourceImportMcp ? config.dshSourceProfile : '[unused]',
     dshSourceImportProviders: config.dshSourceImportProviders,

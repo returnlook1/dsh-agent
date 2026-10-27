@@ -82,7 +82,37 @@ npm start
 - 主题：`body[theme-mode="dark"]` + Semi 暗色 token 覆写，全部样式集中在
   `apps/web/src/styles/global.css`；
 - Markdown 安全约束：`marked` 渲染时关闭原始 HTML、链接协议白名单（http/https/mailto/tel/
-  相对路径），`javascript:` 等降级为纯文本；实现与单测见 `apps/web/src/utils/markdown.ts`。## 2. 两级能力配置
+  相对路径），`javascript:` 等降级为纯文本；实现与单测见 `apps/web/src/utils/markdown.ts`。
+## 1.6 打开 DSH 与能力管理（Skill / MCP）
+
+**打开 DSH**：顶栏右上角的「打开 DSH」是 `dsh://open` 深链（DSH 桌面端安装时注册的自定义协议），
+点击后唤起/聚焦 DeepSeek Harness。Provider、模型、凭据、DSH 自己的插件都在 DSH 里配置；
+Agent Service 只读它的清单与默认模型。
+
+> 若点击无反应：从开始菜单启动 DeepSeek Harness 后再试。`GET /api/dsh-app` 会返回深链、
+> 网页端地址与可达性（网页端需要桌面端注入凭据，直接打开通常 401，因此只做探活）。
+
+**Skill 与 MCP 怎么管理**：右栏底部的「能力来源」面板把两者都摊开了，并且支持在线新增。
+
+| 能力 | 存放位置 | 管理方式 |
+| --- | --- | --- |
+| Skill | `SKILLS_DIRS`（默认 `runtime/skills`）下的 `<name>/SKILL.md` 或 `<name>.md` | 「新建技能」填名字/描述/正文即可；也可「打开目录」直接放文件 |
+| MCP | `MCP_CONFIG`（默认 `config/mcp-servers.json`） | 「新增 MCP」填表单；或「打开配置」编辑 JSON；行尾可删除本地条目 |
+| 来自 DSH Profile | 源 profile 的 skills 目录与 `dsh-mcp-client` 条目 | 只读导入：在 DSH 里改，服务侧刷新即可 |
+
+- **热加载**：技能按文件 mtime 扫描，MCP 配置按文件 mtime 缓存，改完保存就生效，不用重启；
+- **凭据**：MCP 的 `env`/`headers` 写 `${ENV_NAME}` 引用，服务只把被引用的环境变量注入子进程，
+  绝不把真实值写进 `mcp-servers.json`；
+- **只读来源**：从 DSH Profile 导入的 MCP 条目在 UI 里标注为只读，删除按钮只对本地条目生效；
+- **安全开关**：共享部署可设 `AGENT_SERVICE_ALLOW_LOCAL_ACTIONS=off`，关闭「打开目录 / 打开配置 /
+  新建技能 / 改 MCP」等本地动作（接口返回 `403 LOCAL_ACTIONS_DISABLED`）。
+
+相关接口：`GET /api/capabilities/sources`、`POST /api/capabilities/reveal`、
+`POST/DELETE /api/skills`、`PUT/DELETE /api/mcp-servers/:id`。
+
+![右栏底部：能力来源（技能目录 / MCP 配置 / 在线新增）]
+
+## 2. 两级能力配置
 
 | 层级 | 存在哪里 | 作用 |
 | --- | --- | --- |
@@ -202,6 +232,11 @@ MCP 服务器定义在 `config/mcp-servers.json`（支持 stdio 与 streamable-h
 | POST | `/api/mcp-servers/:id/test` | 连接测试：握手 + `tools/list`（可能 20s） |
 | GET | `/api/mcp-servers/:id/tools` | 工具清单（含参数 Schema） |
 | GET | `/api/dsh-source` | 既有 DSH 配置来源诊断（只报变量名，不报凭据） |
+| GET | `/api/dsh-app` | 唤起 DSH 桌面端的深链 + 网页端可达性 |
+| GET | `/api/capabilities/sources` | 技能根目录 / MCP 配置路径 / 本地动作开关 |
+| POST | `/api/capabilities/reveal` | 在资源管理器打开技能目录或 MCP 配置（仅本机） |
+| POST / DELETE | `/api/skills` · `/api/skills/:name` | 新建 / 删除技能（写 `SKILL.md`） |
+| PUT / DELETE | `/api/mcp-servers/:id` | 新增或修改 / 删除本地 MCP 定义 |
 | GET / PUT | `/api/projects/:projectId/agent-config` | 项目默认能力 |
 | POST | `/api/conversations` | 创建对话（返回 conversationId / sessionId / 配置快照） |
 | GET | `/api/conversations?projectId=` | 历史对话列表 |
@@ -255,6 +290,9 @@ curl -N -X POST "http://127.0.0.1:8787/api/conversations/conv-…/messages" \
 | `TURN_TIMEOUT_MS` | `600000` | 单轮上限 |
 | `AGENT_SERVICE_MODEL_DISCOVERY` | `on` | `off` = 关闭向 DSH 探测模型清单（只用缓存） |
 | `DSH_SOURCE_HOME` / `DSH_SOURCE_PROFILE` | – / `desktop` | 复用既有 DSH 配置（Skills/MCP/Provider） |
+| `DSH_DEEP_LINK` | `dsh://open` | 顶栏「打开 DSH」使用的自定义协议 |
+| `DSH_GUI_URL` | `http://127.0.0.1:7857` | DSH 网页端地址（仅探活） |
+| `AGENT_SERVICE_ALLOW_LOCAL_ACTIONS` | `on` | `off` = 禁用打开目录/配置文件、在线增改能力 |
 | `DSH_SOURCE_IMPORT_PROVIDERS` / `_MCP` | `on` | 是否导入对应的定义 |
 | `INTERNAL_TOKEN` | – | 设置后 `/api/*` 要求 `Authorization: Bearer` |
 | `CORS_ORIGINS` | – | 允许的前端来源（逗号分隔），默认同源 |

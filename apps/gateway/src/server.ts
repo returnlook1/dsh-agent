@@ -9,6 +9,7 @@ import { REPO_ROOT, describeConfig, loadConfig, type GatewayConfig } from './con
 import { createLogger, type Logger } from './logger.js'
 import { McpConfig } from './mcp/McpConfig.js'
 import { DshSource } from './dsh/DshSource.js'
+import { CapabilityFiles } from './capabilities/CapabilityFiles.js'
 import { CapabilityRevision } from './runtime/CapabilityRevision.js'
 import { ModelDiscovery } from './models/ModelDiscovery.js'
 import { ModelCatalogService } from './models/ModelCatalogService.js'
@@ -73,6 +74,16 @@ export function createServices(
     logger: logger.child({ component: 'skills' }),
   })
   const skills = new SkillSource(catalog, logger.child({ component: 'skills' }))
+  const capabilities = new CapabilityFiles(
+    {
+      skillsDirs: config.skillsDirs,
+      mcpConfigPath: config.mcpConfigPath,
+      allowLocalActions: config.allowLocalActions,
+      dshSourceLabel: dshSource.label(),
+      logger: logger.child({ component: 'capabilities' }),
+    },
+    catalog,
+  )
   const mcp = new McpConfig({
     configPath: config.mcpConfigPath,
     logger: logger.child({ component: 'mcp' }),
@@ -162,6 +173,7 @@ export function createServices(
     messageLog,
     catalog,
     skills,
+    capabilities,
     mcp,
     models,
     dshSource,

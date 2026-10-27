@@ -325,3 +325,38 @@ Vue 把它当成原生 `<select>` 渲染（白底空白框）。补上导入后�
 
 演示用的 mock 回答也改成一段带标题/列表/表格/代码块的 Markdown（`scripts/demo-answer.mjs`），
 这样离线 `npm run demo` 就能看到渲染效果。
+---
+
+## 14. 打开 DSH 与能力来源管理
+
+两个诉求：① 在服务页面里能直接打开 DSH 去配置；② Skill / MCP 到底怎么管。
+
+### 14.1 「打开 DSH」用自定义协议，而不是网页地址
+
+DSH 桌面端注册了 `dsh` 协议（`dsh://open` 只做"聚焦主窗口"），而它的网页端
+（`http://127.0.0.1:7857`）需要桌面端注入凭据，直接打开会 401。所以：
+
+- 顶栏按钮是 `<a href="dsh://open">`，由操作系统唤起/聚焦桌面端；
+- `GET /api/dsh-app` 返回深链、网页端地址与**可达性**（401 视为可达），前端用一个小圆点
+  表示"桌面端是否在运行"；
+- 不新增"由服务端启动桌面端"的接口：服务没有鉴权，暴露"启动任意程序"的口子不值得；
+  打不开时提示从开始菜单启动。
+
+### 14.2 Skill / MCP 的"管理"落在文件上，不给它们建数据库
+
+- Skill = `<root>/<name>/SKILL.md`（frontmatter + Markdown）；新建就是写这个文件，
+  删除就是删目录；扫描按 mtime，改完即生效。
+- MCP = `config/mcp-servers.json` 的一条定义；新增/修改就是合并 JSON（临时文件 + rename），
+  删除就是移除条目；`McpConfig` 按 mtime/size 缓存，改完即生效。
+- 这样两个能力都能被 Git 管理、能 review、能离线复现；不需要迁移脚本。
+- 来自 DSH Profile 的技能/MCP 是只读导入：要改去 DSH 里改；UI 里只允许删除本地条目。
+
+### 14.3 安全取舍
+
+- 写操作只落在配置给出的目录/文件，名字与 ID 走白名单，路径不接受请求传参；
+- 「打开目录/打开配置」只做 `explorer`/`open`/`xdg-open`，不做 shell 拼接；
+- 共享部署可用 `AGENT_SERVICE_ALLOW_LOCAL_ACTIONS=off` 一键关闭（403 `LOCAL_ACTIONS_DISABLED`）；
+- 凭据仍用 `${ENV_NAME}` 引用，新建 MCP 的表单只写引用，不收集真实 token。
+
+验证：新增 11 个网关用例（来源、建/删技能、增删改 MCP、开关 403、DSH 深链）；
+合计 22 文件 / 240 用例；e2e / check:runtime 保持全绿。

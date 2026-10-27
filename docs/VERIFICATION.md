@@ -25,7 +25,7 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 
 ---
 
-## 2. 单元测试（229 用例）
+## 2. 单元测试（240 用例）
 
 | 范围 | 用例 | 覆盖点 |
 | --- | --- | --- |
@@ -38,6 +38,7 @@ DSH Agent Service 的可复现验证：跑了什么、断言什么、结果如�
 | `apps/gateway/tests/runtime/pool` | 14 | 复用/上限/回收/resume/传输错误广播；**10 并发冷启动只起 1 个运行时**；恢复失败 409；`stop` 与 `RUNTIME_BUSY` |
 | `apps/gateway/tests/runtime/capabilityRevision` | 5 | SKILL.md / MCP 定义 / profile 模板变化 → 版本与 configKey 变化 |
 | `apps/gateway/tests/dsh/dshSource` | 12 | provider/MCP 导入过滤、`${ENV}` 还原、凭据可用性、dump 失败降级 |
+| `apps/gateway/tests/api/capabilities` | 11 | 能力来源、建/删技能、增删改 MCP、本地动作开关 403、DSH 深链 |
 | `apps/gateway/tests/api/service` | 25 | 全部接口与错误码（400/401/404/409/503） |
 | `apps/gateway/tests/models/*` | 24 | 探针输出解析、默认路由、`MODEL_UNKNOWN`/`MODEL_UNAVAILABLE`、缓存与降级 |
 | `apps/gateway/tests/api/models` | 7 | `GET /api/models`、不传模型落默认路由、未知 provider/model 400 |
